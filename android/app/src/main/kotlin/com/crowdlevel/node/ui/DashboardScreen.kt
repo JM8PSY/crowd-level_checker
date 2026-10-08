@@ -97,7 +97,8 @@ fun DashboardScreen(
                 status.lastError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Text("受信: ${status.packetsPerSec} パケット/秒")
                 Text("現在の窓 ${fmtTime(status.currentWindowStartMillis)}〜: ${status.devicesInCurrentWindow} 台（暫定）")
-                Text("スキャン開始 ${fmtTime(status.scanStartedAtMillis)} / 再起動 ${status.restartCount} 回")
+                Text("スキャン開始 ${fmtTime(status.scanStartedAtMillis)}")
+                Text("再起動 定期 ${status.restartCount} 回 / 無受信 ${status.noResultRestartCount} 回")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (status.serviceRunning) {
                         OutlinedButton(onClick = onStopService) { Text("停止") }

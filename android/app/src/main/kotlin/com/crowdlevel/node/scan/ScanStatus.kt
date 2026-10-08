@@ -20,7 +20,10 @@ data class ScanStatus(
     val lastSummary: WindowSummary? = null,
     val lastLogPath: String? = null,
     val scanStartedAtMillis: Long = 0,
+    /** 定期再起動の回数 */
     val restartCount: Int = 0,
+    /** 結果が途絶えたことによる再起動の回数 */
+    val noResultRestartCount: Int = 0,
     val upload: UploadStatus? = null,
 )
 

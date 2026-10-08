@@ -25,7 +25,7 @@ Phase 2 の送信処理は、この集計値（`WindowSummary`）をそのまま
 | メーカー判定 | manufacturerSpecificData の Company ID。apple=0x004C, google=0x00E0, microsoft=0x0006, samsung=0x0075, それ以外=other, メーカーデータなし=none。同じ端末で複数観測した場合は「メーカーデータを含む最後の観測」の値（メーカーデータなしの広告で上書きしない） |
 | ハッシュ | SHA-256(salt ‖ MAC文字列) の先頭16文字（64bit）。salt は Service 起動ごとに16バイト乱数で再生成。生MACはメモリ上の ScanResult 以外に保持しない |
 | デバッグログ | JSON Lines。1行 = 1窓。集計値に加えて `devices` 配列（ハッシュ、最大RSSI、受信回数、Company ID）を含む。保存先はアプリ専用外部ストレージ `Android/data/<pkg>/files/logs/YYYY-MM-DD.jsonl`。送信はしない |
-| スキャン降格対策 | 20分ごとに stop/start して、連続スキャン30分での OPPORTUNISTIC 降格を避ける。あわせて空の ScanFilter を1つ付ける。空フィルタは一部の Android では「フィルタ付き」とみなされ降格の対象外になるが、新しい Android ではフィルタなしと同じ扱いになり、画面オフ中の停止は防げない可能性が高い。効果は実機で確認する |
+| スキャン降格対策 | OS はフィルタなしのスキャン（空の ScanFilter も含む）を、開始から DeviceConfig の `bluetooth/scan_timeout_millis` が経つと OPPORTUNISTIC に移し、結果を渡さなくなる。AOSP の既定は30分だが、Pixel 9a（Android 16）では 300000（5分）だった（2026-10-08 確認）。そこで3分ごとに stop/start してタイマーを数え直させる。想定外の理由で結果が途絶えたときのため、30秒間結果が1件も来なければ再起動する。どちらも数ミリ秒の中断なので部分的な窓にはしない |
 | 画面常時点灯 | 運用の基本。設定で ON/OFF 可能で、ON の間は常駐画面に FLAG_KEEP_SCREEN_ON と最低輝度を適用する。画面オフでもスキャンが続くと実機で確認できた場合だけ OFF 運用を検討する |
 | CPU | 常時給電前提のため、Service が動いている間は PARTIAL_WAKE_LOCK を保持する。画面オフ試験で「CPU 休止」と「スキャン停止」を切り分けるためでもある |
 | 権限 | スキャンに必須なのは BLUETOOTH_SCAN（Android 12以上、neverForLocation なし）と ACCESS_FINE_LOCATION。Android 12以上では FINE だけを要求すると無視されるため COARSE も同じ要求に含める。POST_NOTIFICATIONS（13以上）は要求するが必須にしない。位置情報サービスが OFF の場合は案内する |
@@ -126,7 +126,7 @@ ScanCallback(ScanResult)
 1. 人（スマホ）が近づく・離れると `-60`/`-70` のカウントが変わる
 2. デバッグ ON で `Android/data/com.crowdlevel.node/files/logs/` に .jsonl が1分ごとに追記される（`adb shell` または Files アプリで確認）
 3. Ambient に1分ごとに点が増え、`created` が窓の開始時刻（:00 秒）になっている
-4. 画面常時点灯 ON（運用の基本）で1時間以上動かし、30分を過ぎてもパケット/秒と端末数が落ちない（30分降格の確認）
+4. 画面常時点灯 ON（運用の基本）で1時間以上動かし、パケット数と端末数が落ちない。Bluetooth のログに `regularScanTimeout` が出ない（スキャンタイムアウトの回避の確認）
 5. 機内モードを数分 ON にして戻すと、未送信分が再送され Ambient のグラフに欠けがない
 6. 参考試験：画面常時点灯 OFF で画面を消し、Ambient の値がどう変わるかを見る（空フィルタで画面オフ停止を避けられるかの確認）
 7. 端末を再起動すると自動で Service が立ち上がる。ただし常駐画面は自動では前面に出ないため、画面点灯運用では再起動後にアプリを開く必要がある

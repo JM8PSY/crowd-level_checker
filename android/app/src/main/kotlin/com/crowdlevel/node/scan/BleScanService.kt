@@ -53,10 +53,11 @@ import java.time.ZoneId
  * - スキャンを開始・再開した窓（起動直後、Bluetooth 復帰、失敗からの再試行）と、
  *   スキャンが止まっている間の窓には印を付け、JSON で "partial": true とする
  * - 部分的な窓は端末内ログには残すが、Ambient には送らない
- * - 定期再起動による数ミリ秒の中断は無視する
+ * - 再起動（定期・無受信）による数ミリ秒の中断は無視する
  *
  * そのほか:
- * - 保険として RESTART_INTERVAL_MILLIS ごとにスキャンを stop/start する（30分降格の回避）
+ * - RestartPolicy に従ってスキャンを stop/start する。OS がフィルタなしのスキャンを
+ *   数分で OPPORTUNISTIC に移して結果を止めるのを避けるため
  * - 常時給電前提のため、Service が動いている間は PARTIAL_WAKE_LOCK で CPU を止めない
  */
 class BleScanService : LifecycleService() {
@@ -71,7 +72,8 @@ class BleScanService : LifecycleService() {
     private var uploadStatusJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var packetCounter = 0
-    private var lastRestartMillis = 0L
+    private var lastStartMillis = 0L
+    private var lastResultMillis = 0L
 
     // 以下は IO スレッドからも読む
     @Volatile private var config: NodeConfig = NodeConfig.DEFAULT
@@ -169,8 +171,8 @@ class BleScanService : LifecycleService() {
 
     // ---- スキャン制御（メインスレッド） ----
 
-    /** @param periodic 定期再起動による開始なら true。観測の欠けとはみなさない */
-    private fun startScan(periodic: Boolean = false) {
+    /** @param restart 再起動による開始なら true。数ミリ秒の中断なので観測の欠けとはみなさない */
+    private fun startScan(restart: Boolean = false) {
         if (!adapter.isEnabled) {
             ScanStatusHolder.update { it.copy(bluetoothOn = false, scanning = false, lastError = "Bluetooth OFF") }
             updateNotification()
@@ -179,29 +181,35 @@ class BleScanService : LifecycleService() {
         val s = scanner ?: BleScannerWrapper(adapter, hasher, ::onScanEvent, ::onScanFailed).also { scanner = it }
         if (s.isScanning) return
         val ok = s.start()
-        lastRestartMillis = System.currentTimeMillis()
-        if (ok && !periodic) aggregator.markIncomplete()
-        Log.i(TAG, if (ok) "scan started" else "scan start failed: no BluetoothLeScanner")
+        lastStartMillis = System.currentTimeMillis()
+        if (ok && !restart) aggregator.markIncomplete()
+        if (!restart) Log.i(TAG, if (ok) "scan started" else "scan start failed: no BluetoothLeScanner")
         ScanStatusHolder.update {
             it.copy(
                 scanning = ok,
                 bluetoothOn = true,
                 lastError = if (ok) null else "BluetoothLeScanner を取得できません",
-                scanStartedAtMillis = if (ok && it.scanStartedAtMillis == 0L) lastRestartMillis else it.scanStartedAtMillis,
+                scanStartedAtMillis = if (ok && it.scanStartedAtMillis == 0L) lastStartMillis else it.scanStartedAtMillis,
             )
         }
         updateNotification()
     }
 
-    private fun restartScan() {
-        Log.i(TAG, "periodic scan restart")
+    private fun restartScan(reason: RestartPolicy.Reason) {
+        Log.i(TAG, "scan restart: $reason")
         scanner?.stop()
-        ScanStatusHolder.update { it.copy(restartCount = it.restartCount + 1) }
-        startScan(periodic = true)
+        ScanStatusHolder.update {
+            when (reason) {
+                RestartPolicy.Reason.PERIODIC -> it.copy(restartCount = it.restartCount + 1)
+                RestartPolicy.Reason.NO_RESULTS -> it.copy(noResultRestartCount = it.noResultRestartCount + 1)
+            }
+        }
+        startScan(restart = true)
     }
 
     private fun onScanEvent(event: ScanEvent) {
         packetCounter++
+        lastResultMillis = event.epochMillis
         aggregator.add(event)?.let(::onWindowClosed)
     }
 
@@ -241,9 +249,8 @@ class BleScanService : LifecycleService() {
                         currentWindowStartMillis = aggregator.currentWindowStart,
                     )
                 }
-                if (scanner?.isScanning == true && now - lastRestartMillis >= RESTART_INTERVAL_MILLIS) {
-                    restartScan()
-                }
+                RestartPolicy.decide(now, scanner?.isScanning == true, lastStartMillis, lastResultMillis)
+                    ?.let(::restartScan)
             }
         }
     }
@@ -369,8 +376,6 @@ class BleScanService : LifecycleService() {
         private const val NOTIFICATION_ID = 1
         private const val ACTION_STOP = "com.crowdlevel.node.action.STOP"
 
-        /** 保険としてのスキャン再起動間隔。30分降格より手前に設定 */
-        const val RESTART_INTERVAL_MILLIS = 20 * 60 * 1000L
 
         fun logDir(context: Context): File = File(context.getExternalFilesDir(null) ?: context.filesDir, "logs")
 
