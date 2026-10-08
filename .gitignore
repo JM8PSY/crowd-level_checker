@@ -1,0 +1,29 @@
+# 秘密情報
+.env
+*.env
+android/local.properties
+
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/*.iml
+android/app/*.iml
+android/.kotlin/
+android/captures/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+server/*.db
+server/*.sqlite3
+
+# OS / editor
+.DS_Store
+.vscode/

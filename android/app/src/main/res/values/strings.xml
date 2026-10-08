@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">混雑度ノード</string>
+    <string name="notif_channel_name">BLEスキャン</string>
+    <string name="notif_channel_desc">BLEスキャンの常駐通知</string>
+    <string name="notif_title">スキャン中: %1$s</string>
+    <string name="notif_text_starting">スキャンを開始しています</string>
+    <string name="notif_text_counts">直近1分: -80dBm以上 %1$d 台 / 全体 %2$d 台</string>
+</resources>
