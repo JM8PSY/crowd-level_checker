@@ -18,6 +18,8 @@ data class ScanStatus(
     val devicesInCurrentWindow: Int = 0,
     val currentWindowStartMillis: Long = 0,
     val lastSummary: WindowSummary? = null,
+    /** 直近の窓の推定人数（その時点の式で計算したもの） */
+    val lastEstimate: Int? = null,
     val lastLogPath: String? = null,
     val scanStartedAtMillis: Long = 0,
     /** 定期再起動の回数 */

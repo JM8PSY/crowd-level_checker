@@ -53,6 +53,7 @@ import java.time.ZoneId
  * - スキャンを開始・再開した窓（起動直後、Bluetooth 復帰、失敗からの再試行）と、
  *   スキャンが止まっている間の窓には印を付け、JSON で "partial": true とする
  * - 部分的な窓は端末内ログには残すが、Ambient には送らない
+ * - Ambient には設定の式で計算した推定人数だけを、設定したデータ欄（d1〜d8）へ送る
  * - 再起動（定期・無受信）による数ミリ秒の中断は無視する
  *
  * そのほか:
@@ -150,11 +151,13 @@ class BleScanService : LifecycleService() {
         super.onDestroy()
     }
 
-    /** Ambient の設定が変わったら送信器を作り直す（未送信キューは破棄される） */
+    /** Ambient の設定が変わったら送信器を作り直す（未送信キューと、まとめ途中の区間は破棄される） */
     private fun rebuildUploader(c: NodeConfig) {
         val enabled = c.ambientEnabled && c.ambientChannelId.isNotBlank() && c.ambientWriteKey.isNotBlank()
         val current = uploader
-        if (enabled && current != null && current.channelId == c.ambientChannelId && current.writeKey == c.ambientWriteKey) return
+        if (enabled && current != null && current.channelId == c.ambientChannelId && current.writeKey == c.ambientWriteKey &&
+            current.slot == c.ambientSlot && current.intervalMin == c.ambientIntervalMin
+        ) return
         current?.close()
         uploadStatusJob?.cancel()
         if (!enabled) {
@@ -162,7 +165,7 @@ class BleScanService : LifecycleService() {
             ScanStatusHolder.update { it.copy(upload = null) }
             return
         }
-        val u = AmbientUploader(lifecycleScope, c.ambientChannelId, c.ambientWriteKey)
+        val u = AmbientUploader(lifecycleScope, c.ambientChannelId, c.ambientWriteKey, c.ambientSlot, c.ambientIntervalMin)
         uploader = u
         uploadStatusJob = lifecycleScope.launch {
             u.status.collect { st -> ScanStatusHolder.update { it.copy(upload = st) } }
@@ -272,17 +275,20 @@ class BleScanService : LifecycleService() {
             appVersion = BuildConfig.VERSION_NAME,
             includeDevices = c.debugLog,
         )
+        val estimate = c.estimator().estimate(summary.countsByRssi)
+        // 端末内ログには、生の集計値に加えて Ambient に送る元になった推定人数も残す
+        val logged = summary.copy(estimatedPeople = estimate)
         // 個人を識別できる値（ハッシュを含む）は logcat に出さない
         Log.i(
             TAG,
             "window ${summary.observedAt} all=${summary.countsByRssi["all"]} " +
-                "-80=${summary.countsByRssi["-80"]} adv=${summary.advCount}" +
+                "-80=${summary.countsByRssi["-80"]} adv=${summary.advCount} estimate=$estimate" +
                 if (summary.isPartial) " partial" else "",
         )
         var logPath: String? = null
         var error: String? = null
         logger?.let { l ->
-            runCatching { l.append(summary, result.windowStartMillis) }
+            runCatching { l.append(logged, result.windowStartMillis) }
                 .onSuccess { logPath = it.absolutePath }
                 .onFailure { e ->
                     Log.e(TAG, "ログ書き込み失敗", e)
@@ -290,9 +296,15 @@ class BleScanService : LifecycleService() {
                 }
         }
         ScanStatusHolder.update {
-            it.copy(lastSummary = summary, lastLogPath = logPath ?: it.lastLogPath, lastError = error ?: it.lastError)
+            it.copy(
+                lastSummary = summary,
+                lastEstimate = estimate,
+                lastLogPath = logPath ?: it.lastLogPath,
+                lastError = error ?: it.lastError,
+            )
         }
-        if (!summary.isPartial) uploader?.enqueue(summary, result.windowStartMillis)
+        // 部分的な窓も渡す（送る値には使わないが、Ambient の区間を閉じるきっかけになる）
+        uploader?.submit(result.windowStartMillis, estimate.takeUnless { summary.isPartial })
         updateNotification()
     }
 

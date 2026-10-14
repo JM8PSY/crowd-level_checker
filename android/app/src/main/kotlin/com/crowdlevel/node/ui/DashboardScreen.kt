@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.crowdlevel.node.estimate.Estimator
 import com.crowdlevel.node.scan.ScanStatus
 import com.crowdlevel.node.settings.NodeConfig
 import java.time.Instant
@@ -121,6 +122,9 @@ fun DashboardScreen(
                         if (s.isPartial) "${s.observedAt}（観測が欠けた窓。送信しない）" else s.observedAt,
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    Text("推定人数 ${status.lastEstimate ?: "-"} 人", style = MaterialTheme.typography.headlineMedium)
+                    Text("式: ${config.estimator().describe()}", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(4.dp))
                     Text("RSSI閾値別（累積）", style = MaterialTheme.typography.labelLarge)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         s.countsByRssi.forEach { (k, v) ->
@@ -152,8 +156,8 @@ fun DashboardScreen(
                 if (!config.ambientEnabled || up == null) {
                     Text("OFF")
                 } else {
-                    Text("ON  チャネル ${config.ambientChannelId}")
-                    Text("成功 ${up.sentCount} / 失敗 ${up.failedCount} / 未送信 ${up.queued}")
+                    Text("ON  チャネル ${config.ambientChannelId}（d${config.ambientSlot} = 推定人数、${config.ambientIntervalMin}分ごと）")
+                    Text("送信済み ${up.sentCount}点 / 失敗 ${up.failedCount}回 / 未送信 ${up.queued}点")
                     Text("最終成功 ${fmtTime(up.lastSuccessMillis)} / 最終試行 ${fmtTime(up.lastAttemptMillis)}")
                     up.lastMessage?.let {
                         Text(it, color = if (it.startsWith("OK")) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)

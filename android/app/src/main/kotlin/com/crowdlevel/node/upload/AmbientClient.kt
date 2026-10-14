@@ -4,7 +4,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Ambient の HTTP API（POST /api/v2/channels/{id}/data）を呼ぶ最小クライアント */
+/** Ambient の HTTP API（POST /api/v2/channels/{id}/dataarray、複数点の一括書き込み）を呼ぶ最小クライアント */
 class AmbientClient(private val channelId: String) {
 
     sealed class Result {
@@ -14,7 +14,7 @@ class AmbientClient(private val channelId: String) {
     }
 
     fun post(jsonBody: String): Result {
-        val url = URL("$BASE_URL/$channelId/data")
+        val url = URL("$BASE_URL/$channelId/dataarray")
         return try {
             val conn = url.openConnection() as HttpURLConnection
             try {

@@ -4,11 +4,14 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.crowdlevel.node.BuildConfig
+import com.crowdlevel.node.estimate.Estimator
+import com.crowdlevel.node.upload.AmbientPayload
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -27,7 +30,17 @@ data class NodeConfig(
     val ambientEnabled: Boolean,
     val ambientChannelId: String,
     val ambientWriteKey: String,
+    /** このノードが書き込む Ambient のデータ欄（1〜8 → d1〜d8）。同じチャネルを共有するノードどうしで重ねない */
+    val ambientSlot: Int,
+    /** Ambient へ1点送る間隔 [分]。区間内の推定人数の平均を送る。ノード数 × 1440 ÷ 間隔 ≦ 3000 にする */
+    val ambientIntervalMin: Int,
+    /** 推定人数の式（校正前の暫定）。推定人数 = estimateSlope × 特徴量 + estimateIntercept */
+    val estimateFeature: String,
+    val estimateSlope: Double,
+    val estimateIntercept: Double,
 ) {
+    fun estimator(): Estimator = Estimator(estimateFeature, estimateSlope, estimateIntercept)
+
     companion object {
         /** Ambient の既定値は local.properties → BuildConfig から読む（リポジトリには含めない） */
         val DEFAULT = NodeConfig(
@@ -40,6 +53,12 @@ data class NodeConfig(
             ambientEnabled = BuildConfig.AMBIENT_WRITE_KEY.isNotEmpty(),
             ambientChannelId = BuildConfig.AMBIENT_CHANNEL_ID,
             ambientWriteKey = BuildConfig.AMBIENT_WRITE_KEY,
+            ambientSlot = 1,
+            ambientIntervalMin = 1,
+            // 校正するまでは係数1・切片0（-80 dBm以上の端末数をそのまま推定人数とする）
+            estimateFeature = "-80",
+            estimateSlope = 1.0,
+            estimateIntercept = 0.0,
         )
     }
 }
@@ -59,6 +78,11 @@ class NodeSettings(private val context: Context) {
         val AMBIENT_ENABLED = booleanPreferencesKey("ambient_enabled")
         val AMBIENT_CHANNEL_ID = stringPreferencesKey("ambient_channel_id")
         val AMBIENT_WRITE_KEY = stringPreferencesKey("ambient_write_key")
+        val AMBIENT_SLOT = intPreferencesKey("ambient_slot")
+        val AMBIENT_INTERVAL_MIN = intPreferencesKey("ambient_interval_min")
+        val ESTIMATE_FEATURE = stringPreferencesKey("estimate_feature")
+        val ESTIMATE_SLOPE = doublePreferencesKey("estimate_slope")
+        val ESTIMATE_INTERCEPT = doublePreferencesKey("estimate_intercept")
     }
 
     val config: Flow<NodeConfig> = context.dataStore.data.map { p ->
@@ -73,7 +97,17 @@ class NodeSettings(private val context: Context) {
             ambientEnabled = p[Keys.AMBIENT_ENABLED] ?: d.ambientEnabled,
             ambientChannelId = p[Keys.AMBIENT_CHANNEL_ID] ?: d.ambientChannelId,
             ambientWriteKey = p[Keys.AMBIENT_WRITE_KEY] ?: d.ambientWriteKey,
+            ambientSlot = p[Keys.AMBIENT_SLOT]?.takeIf(AmbientPayload::isValidSlot) ?: d.ambientSlot,
+            ambientIntervalMin = p[Keys.AMBIENT_INTERVAL_MIN]?.takeIf { it in AMBIENT_INTERVAL_RANGE } ?: d.ambientIntervalMin,
+            estimateFeature = p[Keys.ESTIMATE_FEATURE]?.takeIf { it in Estimator.FEATURES } ?: d.estimateFeature,
+            estimateSlope = p[Keys.ESTIMATE_SLOPE] ?: d.estimateSlope,
+            estimateIntercept = p[Keys.ESTIMATE_INTERCEPT] ?: d.estimateIntercept,
         )
+    }
+
+    companion object {
+        /** Ambient の送信間隔として選べる範囲 [分] */
+        val AMBIENT_INTERVAL_RANGE = 1..10
     }
 
     suspend fun current(): NodeConfig = config.first()
@@ -89,6 +123,11 @@ class NodeSettings(private val context: Context) {
             p[Keys.AMBIENT_ENABLED] = config.ambientEnabled
             p[Keys.AMBIENT_CHANNEL_ID] = config.ambientChannelId
             p[Keys.AMBIENT_WRITE_KEY] = config.ambientWriteKey
+            p[Keys.AMBIENT_SLOT] = config.ambientSlot
+            p[Keys.AMBIENT_INTERVAL_MIN] = config.ambientIntervalMin
+            p[Keys.ESTIMATE_FEATURE] = config.estimateFeature
+            p[Keys.ESTIMATE_SLOPE] = config.estimateSlope
+            p[Keys.ESTIMATE_INTERCEPT] = config.estimateIntercept
         }
     }
 }

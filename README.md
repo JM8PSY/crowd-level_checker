@@ -37,6 +37,7 @@ export JAVA_HOME=/path/to/jdk-17
 
 `android/local.properties` に `sdk.dir=<Android SDK のパス>` を書きます（git には含めません）。
 動作確認用に Ambient へ送る場合は、同じファイルに `AMBIENT_CHANNEL_ID` と `AMBIENT_WRITE_KEY` も書きます。
+Ambient には推定人数だけを送ります。複数のノードで1つのチャネル（1つのグラフ）を共有し、ノードごとに設定画面で d1〜d8 の番号を重ならないように割り当てます（詳細は `docs/phase1-android-design.md`）。
 
 端末への導入は `android/scripts/setup-device.sh` でまとめて行えます（インストール、権限付与、バッテリー最適化の除外、起動）。
 

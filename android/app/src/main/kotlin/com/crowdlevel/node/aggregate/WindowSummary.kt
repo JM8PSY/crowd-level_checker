@@ -34,6 +34,8 @@ data class WindowSummary(
     val battery: Int? = null,
     val charging: Boolean? = null,
     @SerialName("app_version") val appVersion: String,
+    /** 端末で計算した推定人数（校正前の暫定の式）。端末内ログにだけ載せ、未計算なら省略する */
+    @SerialName("estimated_people") val estimatedPeople: Int? = null,
     val devices: List<DeviceSummaryJson>? = null,
 ) {
     /** 校正や送信から除外すべき窓か */

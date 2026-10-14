@@ -106,4 +106,12 @@ class WindowSummaryTest {
         assertEquals("true", json["partial"]!!.jsonPrimitive.content)
         assertTrue(s.isPartial)
     }
+
+    @Test
+    fun `推定人数は付けたときだけestimated_peopleとして含め、読み戻せる`() {
+        assertFalse(Json.parseToJsonElement(summary(false).toJson()).jsonObject.containsKey("estimated_people"))
+        val logged = summary(false).copy(estimatedPeople = 12)
+        assertEquals(12, Json.parseToJsonElement(logged.toJson()).jsonObject["estimated_people"]!!.jsonPrimitive.content.toInt())
+        assertEquals(12, WindowSummary.fromJson(logged.toJson()).estimatedPeople)
+    }
 }

@@ -1,6 +1,6 @@
 package com.crowdlevel.node.upload
 
-import com.crowdlevel.node.aggregate.WindowSummary
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.time.Instant
@@ -8,38 +8,31 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * WindowSummary を Ambient（ambidata.io）の d1〜d8 に割り当てる。
+ * Ambient（ambidata.io）へ送る本文を作る。
  *
- * | 項目 | 内容 |
- * |---|---|
- * | d1 | 最大RSSI ≥ -60 dBm の端末数 |
- * | d2 | ≥ -70 dBm |
- * | d3 | ≥ -80 dBm（推定の初期特徴量） |
- * | d4 | ≥ -90 dBm |
- * | d5 | 全端末数 |
- * | d6 | Apple 端末数 |
- * | d7 | RSSI 中央値 [dBm]（端末ゼロなら省略） |
- * | d8 | 受信パケット数 |
+ * 複数ノードで1つのチャネル（＝1つのグラフ）を共有するため、ノードごとに d1〜d8 のどれか1つ（スロット）を
+ * 割り当て、そこに推定人数だけを入れる。グラフ側で d1〜d8 を表示しておけば、ノードを足すと線が増える。
+ * 校正に使う生の集計値は端末内ログ（JSON Lines）に残す。
  */
 object AmbientPayload {
+    /** Ambient の1チャネルが持てるデータ欄の数（d1〜d8） */
+    const val MAX_SLOT = 8
+
+    /** 1点ぶんのデータ。created は "yyyy-MM-dd HH:mm:ss.SSS"（日本時間） */
+    data class Point(val created: String, val value: Int)
+
     private val createdFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
 
-    /**
-     * @param created Ambient の created（"yyyy-MM-dd HH:mm:ss.SSS"、日本時間）。窓の開始時刻を渡す
-     */
-    fun toJson(summary: WindowSummary, writeKey: String, created: String): String {
-        val fields = LinkedHashMap<String, JsonPrimitive>()
-        fields["writeKey"] = JsonPrimitive(writeKey)
-        fields["created"] = JsonPrimitive(created)
-        fields["d1"] = JsonPrimitive(summary.countsByRssi["-60"] ?: 0)
-        fields["d2"] = JsonPrimitive(summary.countsByRssi["-70"] ?: 0)
-        fields["d3"] = JsonPrimitive(summary.countsByRssi["-80"] ?: 0)
-        fields["d4"] = JsonPrimitive(summary.countsByRssi["-90"] ?: 0)
-        fields["d5"] = JsonPrimitive(summary.countsByRssi["all"] ?: 0)
-        fields["d6"] = JsonPrimitive(summary.countsByVendor["apple"] ?: 0)
-        summary.rssiStats?.let { fields["d7"] = JsonPrimitive(it.median) }
-        fields["d8"] = JsonPrimitive(summary.advCount)
-        return JsonObject(fields).toString()
+    fun isValidSlot(slot: Int): Boolean = slot in 1..MAX_SLOT
+
+    /** POST /api/v2/channels/{id}/dataarray の本文。各点は created と d{slot} だけを持つ */
+    fun toJson(slot: Int, points: List<Point>, writeKey: String): String {
+        require(isValidSlot(slot)) { "slot は 1〜$MAX_SLOT: $slot" }
+        val key = "d$slot"
+        val data = points.map { p ->
+            JsonObject(linkedMapOf("created" to JsonPrimitive(p.created), key to JsonPrimitive(p.value)))
+        }
+        return JsonObject(linkedMapOf("writeKey" to JsonPrimitive(writeKey), "data" to JsonArray(data))).toString()
     }
 
     /** Ambient の created 形式。Ambient は日本時間として解釈するため、zone には Asia/Tokyo を渡す */
