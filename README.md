@@ -41,6 +41,10 @@ Ambient には推定人数だけを送ります。複数のノードで1つの�
 
 端末への導入は `android/scripts/setup-device.sh` でまとめて行えます（インストール、権限付与、バッテリー最適化の除外、起動）。
 
+## API サーバ
+
+`server/README.md` を参照してください。ローカルでは `seed-demo` でダミーデータを作り、http://localhost:8000/ で教室カードと推移グラフを確認できます。
+
 ## 開発フェーズ
 
 1. Android アプリ単体でスキャン・集計・JSON ログ記録（`docs/phase1-android-design.md`）

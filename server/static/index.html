@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>教室の混雑度</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <h1>教室の混雑度</h1>
+    <p class="muted" id="now">読み込み中…</p>
+  </header>
+
+  <main>
+    <section id="rooms" class="rooms" aria-live="polite"></section>
+
+    <section id="detail" class="panel" hidden>
+      <div class="panel-head">
+        <h2 id="detail-title"></h2>
+        <div class="controls">
+          <label>日付 <input type="date" id="date"></label>
+          <label class="check"><input type="checkbox" id="show-raw"> 生の端末数も表示</label>
+        </div>
+      </div>
+      <p class="muted" id="detail-note"></p>
+      <div class="chart-box"><canvas id="chart-people" aria-label="推定人数の推移"></canvas></div>
+      <div class="chart-box" id="raw-box" hidden>
+        <h3>RSSI 閾値ごとの端末数（その閾値以上の端末の数）</h3>
+        <canvas id="chart-raw" aria-label="RSSI 閾値ごとの端末数の推移"></canvas>
+      </div>
+      <details>
+        <summary>表で見る</summary>
+        <div class="table-wrap"><table id="table"></table></div>
+      </details>
+    </section>
+
+    <section class="panel">
+      <h2>実人数の入力（校正用）</h2>
+      <form id="gt-form">
+        <label>教室 <select id="gt-room" required></select></label>
+        <label>人数 <input type="number" id="gt-people" min="0" required inputmode="numeric"></label>
+        <label>時刻（空欄なら今） <input type="datetime-local" id="gt-time"></label>
+        <label>メモ <input type="text" id="gt-note" placeholder="例：授業中、前方に集中"></label>
+        <label>管理トークン <input type="password" id="gt-token" required autocomplete="off"></label>
+        <button type="submit">登録</button>
+        <p id="gt-msg" class="muted" role="status"></p>
+      </form>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

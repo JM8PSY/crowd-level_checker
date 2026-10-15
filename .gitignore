@@ -27,3 +27,4 @@ server/*.sqlite3
 # OS / editor
 .DS_Store
 .vscode/
+.pytest_cache/
