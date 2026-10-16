@@ -8,6 +8,7 @@ import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import com.crowdlevel.node.aggregate.AddressHasher
+import com.crowdlevel.node.aggregate.AdvertisementInfo
 import com.crowdlevel.node.aggregate.ScanEvent
 
 /**
@@ -80,15 +81,21 @@ class BleScannerWrapper(
     private fun toEvent(result: ScanResult): ScanEvent {
         val mfr = result.scanRecord?.manufacturerSpecificData
         val companyId = if (mfr != null && mfr.size() > 0) mfr.keyAt(0) else null
+        val record = result.scanRecord
         return ScanEvent(
             hash = hasher.hash(result.device.address),
             rssi = result.rssi,
             companyId = companyId,
             epochMillis = System.currentTimeMillis(),
+            serviceUuids = record?.serviceUuids.orEmpty().map { AdvertisementInfo.shortUuid(it.toString()) },
+            serviceDataUuids = record?.serviceData?.keys.orEmpty().map { AdvertisementInfo.shortUuid(it.toString()) },
+            appleTypes = mfr?.get(APPLE_COMPANY_ID)?.let(AdvertisementInfo::appleTypes).orEmpty(),
         )
     }
 
     companion object {
+        private const val APPLE_COMPANY_ID = 0x004C
+
         fun errorName(code: Int): String = when (code) {
             ScanCallback.SCAN_FAILED_ALREADY_STARTED -> "ALREADY_STARTED"
             ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> "APPLICATION_REGISTRATION_FAILED"

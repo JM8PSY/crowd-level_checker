@@ -41,6 +41,7 @@ class ApiPayloadTest {
         assertFalse("devices" in obj)
         assertFalse("adv_count" in obj)
         assertFalse("estimated_people" in obj)
+        assertFalse("excluded" in obj)
         // ハッシュが文字列として紛れ込んでいないこと
         assertFalse(json.contains("aaaa"))
     }

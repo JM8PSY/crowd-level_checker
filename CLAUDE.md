@@ -34,6 +34,7 @@
 - 窓内のユニークなハッシュを、最大RSSIで次の閾値別に数える：-60 / -70 / -80 / -90 dBm
 - メーカーデータ（Company ID）でカテゴリ別に数える：apple(0x004C) / google(0x00E0) / microsoft(0x0006) / samsung(0x0075) / other / none
 - RSSIの統計：中央値、上位/下位の分位点
+- Apple の「探す」（0x12）だけ・iBeacon（0x02）だけを出しているアドレスは数えない（同じ端末が別アドレスで二重に見えるため。2026-10-17〜、docs/experiments/2026-10-17-apple-double-count.md）
 - デバッグモードON時のみ、端末内CSVに生ログ（時刻、ハッシュ、RSSI、Company ID）を保存する。校正分析用で、送信はしない
 
 ### 送信

@@ -280,7 +280,7 @@ curl -X POST "https://vxhbjnbsrfopczqxqbhp.supabase.co/rest/v1/rpc/submit_observ
 | `room_id` | | 文字列 | 観測した部屋（`rest-3f` / `rest-2f`）。使っている部屋だけ受け付ける。省くとノードの今の部屋 |
 | `observed_at` | ○ | 時刻 | 窓の開始時刻（タイムゾーン付き） |
 | `window_sec` | ○ | 正の整数 | 窓の長さ（秒）。通常 60 |
-| `counts_by_rssi` | ○ | オブジェクト | 窓内のユニーク端末のうち、最大 RSSI がその値以上の数（累積）。キー `-60` / `-70` / `-80` / `-90` / `all` |
+| `counts_by_rssi` | ○ | オブジェクト | 窓内のユニーク端末のうち、最大 RSSI がその値以上の数（累積）。キー `-60` / `-70` / `-80` / `-90` / `all`。Android アプリは、Apple の「探す」だけ・iBeacon だけを出しているアドレスを数えない（同じ端末の二重カウントと固定ビーコンを外すため。`counts_by_vendor` と `rssi_stats` も同じ） |
 | `counts_by_vendor` | ○ | オブジェクト | メーカー別の端末数。キー `apple` / `google` / `microsoft` / `samsung` / `other` / `none` |
 | `rssi_stats` | | オブジェクト / null | 端末ごとの最大 RSSI の `median` / `p10` / `p90` |
 | `adv_count` | | 整数 | 受信したパケット数 |

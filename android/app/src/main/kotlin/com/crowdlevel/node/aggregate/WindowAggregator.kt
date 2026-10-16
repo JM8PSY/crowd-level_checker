@@ -6,19 +6,30 @@ data class DeviceSummary(
     val maxRssi: Int,
     val advCount: Int,
     val companyId: Int?,
+    /** 窓内に見えたサービス UUID・サービスデータの UUID・Apple の種類の番号（それぞれ和集合、昇順） */
+    val serviceUuids: List<String> = emptyList(),
+    val serviceDataUuids: List<String> = emptyList(),
+    val appleTypes: List<Int> = emptyList(),
 )
 
 /** 確定した1窓の集計結果（Android 非依存） */
 data class WindowResult(
     val windowStartMillis: Long,
     val windowSec: Int,
-    /** 最大RSSIの降順 */
+    /** 最大RSSIの降順。[DeviceFilter] で数えない端末も含む（端末内ログ用） */
     val devices: List<DeviceSummary>,
     /** 窓内に受信したパケット総数 */
     val advCount: Int,
     /** 窓の全期間を観測できたか。起動直後やスキャンが止まっていた時間を含む窓は false */
     val complete: Boolean = true,
-)
+) {
+    /** 人数の推定に使う端末（集計値はこれから作る） */
+    val countedDevices: List<DeviceSummary> get() = devices.filter(DeviceFilter::isCounted)
+
+    /** 数えなかった端末の数（理由ごと）。ないときは空 */
+    val excludedCounts: Map<String, Int>
+        get() = devices.mapNotNull { DeviceFilter.excludeReason(it)?.key }.groupingBy { it }.eachCount().toSortedMap()
+}
 
 /**
  * 時計の分境界に揃えた固定窓で ScanEvent を集計する。
@@ -33,7 +44,17 @@ class WindowAggregator(
     startMillis: Long,
     private val windowMillis: Long = DEFAULT_WINDOW_MILLIS,
 ) {
-    private class Accumulator(var maxRssi: Int, var advCount: Int, var companyId: Int?)
+    private class Accumulator(var maxRssi: Int, var advCount: Int, var companyId: Int?) {
+        val serviceUuids = sortedSetOf<String>()
+        val serviceDataUuids = sortedSetOf<String>()
+        val appleTypes = sortedSetOf<Int>()
+
+        fun addInfo(e: ScanEvent) {
+            serviceUuids += e.serviceUuids
+            serviceDataUuids += e.serviceDataUuids
+            appleTypes += e.appleTypes
+        }
+    }
 
     var currentWindowStart: Long = windowStartOf(startMillis, windowMillis)
         private set
@@ -42,8 +63,8 @@ class WindowAggregator(
     private var advCount = 0
     private var incomplete = false
 
-    /** 現在の窓でこれまでに見えたユニーク端末数（UI の暫定表示用） */
-    val currentDeviceCount: Int get() = devices.size
+    /** 現在の窓でこれまでに見えたユニーク端末数（UI の暫定表示用）。[DeviceFilter] で外す端末は数えない */
+    val currentDeviceCount: Int get() = devices.values.count { DeviceFilter.excludeReason(it.companyId, it.appleTypes) == null }
 
     /** 現在の窓を「観測が欠けている」とする。窓が切り替わると解除される */
     fun markIncomplete() {
@@ -59,11 +80,12 @@ class WindowAggregator(
         val closed = flush(event.epochMillis)
         val acc = devices[event.hash]
         if (acc == null) {
-            devices[event.hash] = Accumulator(event.rssi, 1, event.companyId)
+            devices[event.hash] = Accumulator(event.rssi, 1, event.companyId).also { it.addInfo(event) }
         } else {
             if (event.rssi > acc.maxRssi) acc.maxRssi = event.rssi
             acc.advCount += 1
             if (event.companyId != null) acc.companyId = event.companyId
+            acc.addInfo(event)
         }
         advCount += 1
         return closed
@@ -78,7 +100,12 @@ class WindowAggregator(
         val result = WindowResult(
             windowStartMillis = currentWindowStart,
             windowSec = (windowMillis / 1000).toInt(),
-            devices = devices.map { (hash, acc) -> DeviceSummary(hash, acc.maxRssi, acc.advCount, acc.companyId) }
+            devices = devices.map { (hash, acc) ->
+                DeviceSummary(
+                    hash, acc.maxRssi, acc.advCount, acc.companyId,
+                    acc.serviceUuids.toList(), acc.serviceDataUuids.toList(), acc.appleTypes.toList(),
+                )
+            }
                 .sortedWith(compareByDescending<DeviceSummary> { it.maxRssi }.thenBy { it.hash }),
             advCount = advCount,
             complete = !incomplete,

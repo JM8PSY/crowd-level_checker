@@ -14,6 +14,12 @@ data class DeviceSummaryJson(
     @SerialName("max_rssi") val maxRssi: Int,
     @SerialName("n") val advCount: Int,
     @SerialName("cid") val companyId: Int?,
+    /** 調査用。空なら省略する */
+    @SerialName("uuids") val serviceUuids: List<String>? = null,
+    @SerialName("sdata") val serviceDataUuids: List<String>? = null,
+    @SerialName("apple") val appleTypes: List<Int>? = null,
+    /** 人数の推定に使わなかった理由（"findmy" / "ibeacon"）。数えた端末では省略する */
+    @SerialName("skip") val skipReason: String? = null,
 )
 
 /**
@@ -38,6 +44,8 @@ data class WindowSummary(
     @SerialName("app_version") val appVersion: String,
     /** 端末で計算した推定人数（校正前の暫定の式）。端末内ログにだけ載せ、未計算なら省略する */
     @SerialName("estimated_people") val estimatedPeople: Int? = null,
+    /** 数えなかった端末の数（理由ごと、例 {"findmy": 3, "ibeacon": 1}）。端末内ログにだけ載せ、なければ省略する */
+    val excluded: Map<String, Int>? = null,
     val devices: List<DeviceSummaryJson>? = null,
 ) {
     /** 校正や送信から除外すべき窓か */
@@ -71,15 +79,23 @@ data class WindowSummary(
             observedAt = formatObservedAt(result.windowStartMillis, zone),
             windowSec = result.windowSec,
             partial = if (result.complete) null else true,
-            countsByRssi = Summaries.countsByRssi(result.devices),
-            countsByVendor = Summaries.countsByVendor(result.devices),
-            rssiStats = Summaries.rssiStats(result.devices),
+            // 集計値は数える端末だけから作る（探すだけ・iBeacon だけの Apple のアドレスは外す。DeviceFilter）
+            countsByRssi = Summaries.countsByRssi(result.countedDevices),
+            countsByVendor = Summaries.countsByVendor(result.countedDevices),
+            rssiStats = Summaries.rssiStats(result.countedDevices),
             advCount = result.advCount,
             battery = battery,
             charging = charging,
             appVersion = appVersion,
+            excluded = result.excludedCounts.ifEmpty { null },
             devices = if (includeDevices) {
-                result.devices.map { DeviceSummaryJson(it.hash, it.maxRssi, it.advCount, it.companyId) }
+                result.devices.map {
+                    DeviceSummaryJson(
+                        it.hash, it.maxRssi, it.advCount, it.companyId,
+                        it.serviceUuids.ifEmpty { null }, it.serviceDataUuids.ifEmpty { null }, it.appleTypes.ifEmpty { null },
+                        DeviceFilter.excludeReason(it)?.key,
+                    )
+                }
             } else {
                 null
             },
