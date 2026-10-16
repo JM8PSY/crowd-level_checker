@@ -13,7 +13,9 @@ val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
-fun localProp(key: String, default: String = ""): String = localProps.getProperty(key, default)
+// -PNODE_ID=... のように Gradle プロパティで渡した値を優先する（端末ごとに local.properties を書き換えずにビルドするため）
+fun localProp(key: String, default: String = ""): String =
+    providers.gradleProperty(key).orNull ?: localProps.getProperty(key, default)
 
 android {
     namespace = "com.crowdlevel.node"

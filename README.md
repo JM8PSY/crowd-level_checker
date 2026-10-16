@@ -45,6 +45,13 @@ NODE_ID=room-1-01
 NODE_TOKEN=<発行されたトークン>
 ```
 
+端末を複数台使うときは、`local.properties` を書き換えずにビルド時に値を渡せます。インストールは端末を指定して行います。
+
+```sh
+./gradlew :app:assembleDebug -PNODE_ID=room-1-02 -PNODE_TOKEN=<トークン>
+ANDROID_SERIAL=<端末のシリアル> scripts/setup-device.sh
+```
+
 送信の仕組みは `docs/phase2-supabase.md` にあります。
 動作確認用に Ambient へ送る場合は、同じファイルに `AMBIENT_CHANNEL_ID` と `AMBIENT_WRITE_KEY` も書きます。
 Ambient には推定人数だけを送ります。複数のノードで1つのチャネル（1つのグラフ）を共有し、ノードごとに設定画面で d1〜d8 の番号を重ならないように割り当てます（詳細は `docs/phase1-android-design.md`）。
