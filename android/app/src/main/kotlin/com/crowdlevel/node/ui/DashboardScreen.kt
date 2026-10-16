@@ -12,7 +12,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -20,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.crowdlevel.node.estimate.Estimator
 import com.crowdlevel.node.scan.ScanStatus
 import com.crowdlevel.node.settings.NodeConfig
+import com.crowdlevel.node.settings.Rooms
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -29,6 +34,7 @@ private val timeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:s
 private fun fmtTime(millis: Long): String =
     if (millis == 0L) "--:--:--" else timeFormat.format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     status: ScanStatus,
@@ -44,6 +50,7 @@ fun DashboardScreen(
     onStopService: () -> Unit,
     onOpenSettings: () -> Unit,
     onRefreshChecks: () -> Unit,
+    onSelectRoom: (String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -55,6 +62,26 @@ fun DashboardScreen(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(config.nodeId, style = MaterialTheme.typography.headlineSmall)
             OutlinedButton(onClick = onOpenSettings) { Text("設定") }
+        }
+
+        // ---- 設置場所 ----
+        Card {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("設置場所", style = MaterialTheme.typography.titleMedium)
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    Rooms.OPTIONS.forEachIndexed { i, room ->
+                        SegmentedButton(
+                            selected = config.roomId == room.id,
+                            onClick = { onSelectRoom(room.id) },
+                            shape = SegmentedButtonDefaults.itemShape(index = i, count = Rooms.OPTIONS.size),
+                        ) { Text(room.label) }
+                    }
+                }
+                Text(
+                    "切り替えた分の1分間は送信しません（2部屋の観測が混ざるため）",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
 
         // ---- セットアップ状態 ----
@@ -156,7 +183,7 @@ fun DashboardScreen(
                 if (up == null) {
                     Text("OFF（設定の URL・キー・ノードのトークンが揃うと送信します）")
                 } else {
-                    Text("ON  ノード ${config.nodeId}（${config.sendIntervalSec}秒ごと）")
+                    Text("ON  ノード ${config.nodeId} → ${Rooms.labelOf(config.roomId)}（${config.sendIntervalSec}秒ごと）")
                     Text("送信済み ${up.sentCount}件 / 失敗 ${up.failedCount}回 / 未送信 ${up.queued}件（端末内に保存）")
                     Text("最終成功 ${fmtTime(up.lastSuccessMillis)} / 最終試行 ${fmtTime(up.lastAttemptMillis)}")
                     up.lastMessage?.let {

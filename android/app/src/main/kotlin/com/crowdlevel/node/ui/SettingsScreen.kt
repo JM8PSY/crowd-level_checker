@@ -153,6 +153,7 @@ fun SettingsScreen(config: NodeConfig, onSave: (NodeConfig) -> Unit, onBack: () 
                     onSave(
                         NodeConfig(
                             nodeId = nodeId.trim(),
+                            roomId = config.roomId, // 部屋はダッシュボードのトグルで切り替える
                             apiUrl = apiUrl.trim(),
                             apiKey = apiKey.trim(),
                             apiToken = apiToken.trim(),

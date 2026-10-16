@@ -1,4 +1,4 @@
-// 教室の混雑度ページ。Supabase の get_rooms を30秒ごとに読み直し、選んだ教室の推移をグラフにする
+// 休憩室の混雑度ページ。Supabase の get_rooms を30秒ごとに読み直し、選んだ部屋の推移をグラフにする
 "use strict";
 
 // 接続先は config.js（window.CROWD_CONFIG）で決める
@@ -41,7 +41,7 @@ function formulaText(e) {
   return `${feature} × ${e.coef} + ${e.intercept ?? 0}`;
 }
 
-/** 教室の推定に使っている式。ノードが送ってきた式があればそれ、なければサーバの既定の式 */
+/** 部屋の推定に使っている式。ノードが送ってきた式があればそれ、なければサーバの既定の式 */
 function roomFormula(r) {
   const fromNodes = [...new Set(r.nodes.filter((n) => n.estimator).map((n) => formulaText(n.estimator)))];
   if (fromNodes.length) return `ノードの設定：${fromNodes.join(" / ")}`;
@@ -52,7 +52,7 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
-// ---- 教室カード ----
+// ---- 部屋のカード ----
 
 async function loadRooms() {
   try {
@@ -71,22 +71,24 @@ async function loadRooms() {
 function renderRooms() {
   const box = $("rooms");
   if (!state.rooms.length) {
-    box.innerHTML = `<p class="muted">教室がありません。Supabase の SQL Editor で <code>supabase/seed_demo.sql</code> を実行するとデモデータを作れます。</p>`;
+    box.innerHTML = `<p class="muted">部屋がありません。Supabase の SQL Editor で <code>select private.set_room('rest-3f', '3F休憩室', '3F', 1);</code> のように登録します。</p>`;
     return;
   }
   box.innerHTML = state.rooms.map((r) => {
     const cls = r.level ?? "unknown";
-    const people = r.estimated_people != null ? `推定 約${Math.round(r.estimated_people)}人` : "推定できません（稼働中のノードなし）";
+    const people = r.estimated_people != null
+      ? `推定 約${Math.round(r.estimated_people)}人`
+      : r.nodes.length ? "推定できません（稼働中のノードなし）" : "この部屋にノードはありません（アプリで設置場所を選ぶと表示されます）";
     const nodes = r.nodes.map((n) => `
       <li><span class="badge ${n.status}">${n.status === "online" ? "稼働中" : "停止"}</span>
       ${esc(n.id)}・最終受信 ${fmtTime(n.last_seen_at)}${n.battery != null ? `・電池 ${n.battery}%` : ""}</li>`).join("");
     return `
       <button class="card ${cls}" data-room="${esc(r.id)}" aria-pressed="${r.id === state.selected}">
-        <div class="name">${esc(r.name)}</div>
+        <div class="name">${r.floor ? `<span class="floor">${esc(r.floor)}</span>` : ""}${esc(r.name)}</div>
         <div class="level"><span class="dot" aria-hidden="true"></span>${LEVEL_LABELS[r.level] ?? "不明"}</div>
         <div class="people">${people}</div>
         <div class="muted">最終観測 ${fmtTime(r.updated_at)}
-          <span class="uncal">（推定の式 ${esc(roomFormula(r))}）</span></div>
+          ${r.nodes.length ? `<span class="uncal">（推定の式 ${esc(roomFormula(r))}）</span>` : ""}</div>
         <ul class="nodes">${nodes}</ul>
       </button>`;
   }).join("");

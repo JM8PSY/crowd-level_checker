@@ -30,6 +30,7 @@ class ApiPayloadTest {
         charging = true,
         appVersion = "0.1.0",
         includeDevices = true,
+        roomId = "rest-2f",
     ).copy(estimatedPeople = 2)
     private val estimator = Estimator("-60", 0.5, 1.0)
 
@@ -48,6 +49,7 @@ class ApiPayloadTest {
     fun `サーバが必要とするキーは残す`() {
         val obj = Json.parseToJsonElement(ApiPayload.observationJson(summary, estimator)).jsonObject
         assertEquals("room-3A-01", obj["node_id"]!!.jsonPrimitive.content)
+        assertEquals("rest-2f", obj["room_id"]!!.jsonPrimitive.content)
         assertEquals("2026-10-08T10:15:00+09:00", obj["observed_at"]!!.jsonPrimitive.content)
         assertEquals(60, obj["window_sec"]!!.jsonPrimitive.int)
         assertEquals(1, obj["counts_by_rssi"]!!.jsonObject["-70"]!!.jsonPrimitive.int)

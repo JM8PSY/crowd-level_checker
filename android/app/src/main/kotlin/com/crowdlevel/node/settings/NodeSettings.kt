@@ -21,6 +21,8 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 /** 設定値のスナップショット */
 data class NodeConfig(
     val nodeId: String,
+    /** ノードを置いている部屋（[Rooms.OPTIONS] の ID）。観測値に添えて送る */
+    val roomId: String,
     /** 送信先の Supabase の URL（https://<ref>.supabase.co） */
     val apiUrl: String,
     /** Supabase の publishable key（公開してよいキー） */
@@ -49,6 +51,7 @@ data class NodeConfig(
         /** Ambient・ノードの既定値は local.properties → BuildConfig から読む（リポジトリには含めない） */
         val DEFAULT = NodeConfig(
             nodeId = BuildConfig.NODE_ID,
+            roomId = Rooms.DEFAULT,
             apiUrl = BuildConfig.SUPABASE_URL,
             apiKey = BuildConfig.SUPABASE_KEY,
             apiToken = BuildConfig.NODE_TOKEN,
@@ -75,6 +78,7 @@ data class NodeConfig(
 class NodeSettings(private val context: Context) {
     private object Keys {
         val NODE_ID = stringPreferencesKey("node_id")
+        val ROOM_ID = stringPreferencesKey("room_id")
         val API_URL = stringPreferencesKey("api_url")
         val API_KEY = stringPreferencesKey("api_key")
         val API_TOKEN = stringPreferencesKey("api_token")
@@ -95,6 +99,7 @@ class NodeSettings(private val context: Context) {
         val d = NodeConfig.DEFAULT
         NodeConfig(
             nodeId = p[Keys.NODE_ID] ?: d.nodeId,
+            roomId = p[Keys.ROOM_ID]?.takeIf(Rooms::isValid) ?: d.roomId,
             // 空で保存されている（Phase 1 で未使用だった）ときはビルド時の既定値を使う
             apiUrl = p[Keys.API_URL]?.takeIf { it.isNotBlank() } ?: d.apiUrl,
             apiKey = p[Keys.API_KEY]?.takeIf { it.isNotBlank() } ?: d.apiKey,
@@ -120,9 +125,16 @@ class NodeSettings(private val context: Context) {
 
     suspend fun current(): NodeConfig = config.first()
 
+    /** 部屋だけを切り替える（画面のトグルから。ほかの設定には触れない） */
+    suspend fun setRoom(roomId: String) {
+        require(Rooms.isValid(roomId)) { "unknown room: $roomId" }
+        context.dataStore.edit { p -> p[Keys.ROOM_ID] = roomId }
+    }
+
     suspend fun update(config: NodeConfig) {
         context.dataStore.edit { p ->
             p[Keys.NODE_ID] = config.nodeId
+            p[Keys.ROOM_ID] = config.roomId
             p[Keys.API_URL] = config.apiUrl
             p[Keys.API_KEY] = config.apiKey
             p[Keys.API_TOKEN] = config.apiToken

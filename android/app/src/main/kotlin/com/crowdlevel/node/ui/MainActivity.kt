@@ -93,6 +93,7 @@ class MainActivity : ComponentActivity() {
                                 onStartService = { BleScanService.start(this@MainActivity) },
                                 onStopService = { BleScanService.stop(this@MainActivity) },
                                 onOpenSettings = { showSettings = true },
+                                onSelectRoom = { roomId -> scope.launch { settings.setRoom(roomId) } },
                                 onRefreshChecks = {
                                     locationOn = Permissions.locationEnabled(this@MainActivity)
                                     batteryExempt = Permissions.ignoringBatteryOptimizations(this@MainActivity)

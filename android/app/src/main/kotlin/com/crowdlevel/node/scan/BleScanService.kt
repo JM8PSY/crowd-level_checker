@@ -30,6 +30,7 @@ import com.crowdlevel.node.aggregate.WindowSummary
 import com.crowdlevel.node.log.JsonlLogger
 import com.crowdlevel.node.settings.NodeConfig
 import com.crowdlevel.node.settings.NodeSettings
+import com.crowdlevel.node.settings.Rooms
 import com.crowdlevel.node.ui.MainActivity
 import com.crowdlevel.node.upload.AmbientUploader
 import com.crowdlevel.node.upload.api.ApiUploader
@@ -84,6 +85,8 @@ class BleScanService : LifecycleService() {
     @Volatile private var logger: JsonlLogger? = null
     @Volatile private var uploader: AmbientUploader? = null
     @Volatile private var apiUploader: ApiUploader? = null
+    /** 最後に部屋を切り替えた時刻。この時刻より前に始まった窓は2部屋が混ざるので部分的な窓にする */
+    @Volatile private var roomChangedAtMillis = 0L
 
     private val zone: ZoneId = ZoneId.systemDefault()
 
@@ -122,6 +125,10 @@ class BleScanService : LifecycleService() {
         )
         lifecycleScope.launch {
             settings.config.collectLatest { c ->
+                if (c.roomId != config.roomId && config !== NodeConfig.DEFAULT) {
+                    roomChangedAtMillis = System.currentTimeMillis()
+                    Log.i(TAG, "room changed: ${config.roomId} -> ${c.roomId}")
+                }
                 config = c
                 logger = if (c.debugLog) JsonlLogger(logDir(this@BleScanService), zone) else null
                 rebuildUploader(c)
@@ -303,7 +310,11 @@ class BleScanService : LifecycleService() {
             charging = battery?.second,
             appVersion = BuildConfig.VERSION_NAME,
             includeDevices = c.debugLog,
-        )
+            roomId = c.roomId,
+        ).let { s ->
+            // 窓の途中で部屋を切り替えたら、その窓は2部屋の観測が混ざるので送らない
+            if (roomChangedAtMillis > result.windowStartMillis) s.copy(partial = true) else s
+        }
         val estimator = c.estimator()
         val estimate = estimator.estimate(summary.countsByRssi)
         // 端末内ログには、生の集計値に加えて Ambient に送る元になった推定人数も残す
@@ -396,7 +407,7 @@ class BleScanService : LifecycleService() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_scan)
-            .setContentTitle(getString(R.string.notif_title, config.nodeId))
+            .setContentTitle(getString(R.string.notif_title, "${config.nodeId}・${Rooms.labelOf(config.roomId)}"))
             .setContentText(text)
             .setContentIntent(openIntent)
             .setOngoing(true)

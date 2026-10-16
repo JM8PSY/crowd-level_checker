@@ -114,4 +114,12 @@ class WindowSummaryTest {
         assertEquals(12, Json.parseToJsonElement(logged.toJson()).jsonObject["estimated_people"]!!.jsonPrimitive.content.toInt())
         assertEquals(12, WindowSummary.fromJson(logged.toJson()).estimatedPeople)
     }
+
+    @Test
+    fun `部屋はroom_idとして載り、未設定なら省略する`() {
+        val withRoom = WindowSummary.from(result(), "n", tokyo, null, null, "0.1.0", false, roomId = "rest-3f")
+        val obj = Json.parseToJsonElement(withRoom.toJson()).jsonObject
+        assertEquals("rest-3f", obj["room_id"]!!.jsonPrimitive.content)
+        assertFalse("room_id" in Json.parseToJsonElement(summary(false).toJson()).jsonObject)
+    }
 }

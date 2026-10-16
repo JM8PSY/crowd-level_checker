@@ -23,6 +23,8 @@ data class DeviceSummaryJson(
 @Serializable
 data class WindowSummary(
     @SerialName("node_id") val nodeId: String,
+    /** ノードを置いている部屋。設定されていなければ省略する */
+    @SerialName("room_id") val roomId: String? = null,
     @SerialName("observed_at") val observedAt: String,
     @SerialName("window_sec") val windowSec: Int,
     /** 観測が欠けた窓（起動直後、スキャン停止中など）のときだけ true。完全な窓では省略する */
@@ -62,8 +64,10 @@ data class WindowSummary(
             charging: Boolean?,
             appVersion: String,
             includeDevices: Boolean,
+            roomId: String? = null,
         ): WindowSummary = WindowSummary(
             nodeId = nodeId,
+            roomId = roomId,
             observedAt = formatObservedAt(result.windowStartMillis, zone),
             windowSec = result.windowSec,
             partial = if (result.complete) null else true,

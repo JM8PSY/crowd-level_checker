@@ -81,7 +81,8 @@ h3 { font-size: 0.9rem; font-weight: 600; color: var(--text-2); margin: 16px 0 4
 .card.empty { border-left-color: var(--good); }
 .card.moderate { border-left-color: var(--warning); }
 .card.crowded { border-left-color: var(--critical); }
-.card .name { font-weight: 600; }
+.card .name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.floor { font-size: 0.75rem; font-weight: 700; padding: 0 6px; border-radius: 4px; background: var(--series-1); color: #fff; }
 .level { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; font-size: 1.5rem; font-weight: 700; }
 .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--offline); flex: none; }
 .empty .dot { background: var(--good); }

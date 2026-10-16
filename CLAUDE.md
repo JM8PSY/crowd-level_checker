@@ -54,20 +54,21 @@
 
 ## 2. API（/supabase）
 - 2026-10-16 に FastAPI + SQLite から Supabase（Postgres + 自動 REST API）へ変更。サーバは置かない
-- テーブル：rooms, nodes（room_idに紐付け、トークンはハッシュで保存）, observations, ground_truth（実人数）, calibrations（教室ごとの係数と段階の閾値）。書き込みは RPC 経由のみ（RLS）
+- テーブル：rooms（floor・表示順・active）, nodes（今いる部屋の room_id、トークンはハッシュで保存）, observations, ground_truth（実人数）, calibrations（部屋ごとの係数と段階の閾値）。書き込みは RPC 経由のみ（RLS）
+- 部屋：3F休憩室（rest-3f）と 2F休憩室（rest-2f）。ノードはアプリのトグルで部屋を選び、観測値に room_id を添えて送る（2026-10-17〜）
 - RPC（詳細は supabase/README.md）
   - submit_observations（ノード用、x-node-token で認証）
   - submit_ground_truth（実人数の手入力。x-admin-token で認証）
-  - get_rooms（各教室の最新の混雑度、ノードの生死）
+  - get_rooms(room_id?)（各部屋の最新の混雑度、ノードの生死）
   - get_room_history(room_id, from_ts, to_ts)（推移データ）
-- 管理操作（教室・ノード登録、トークン発行、校正値登録）は SQL Editor から private.* の関数で行う
+- 管理操作（部屋・ノード登録、トークン発行、校正値登録）は SQL Editor から private.* の関数で行う
 - 推定：採用する特徴量（初期値は counts_by_rssi["-80"]）に線形係数を掛けて推定人数を出し、閾値で「空き／やや混雑／混雑」に変換する。式（特徴量・係数・切片）はノードが観測値に estimator として添えて送り（スマホの設定画面の式）、サーバはその式で推定する（2026-10-17〜）。式のない観測と段階の閾値は calibrations テーブルから読む
 - 最終受信から3分を超えたノードは offline と表示する
 
 ## 3. Webページ（/web）
 - ビルド不要の素のHTML/CSS/JS＋Chart.js（CDN）
-- 教室カード：段階表示（色＋文字）、推定人数の目安、最終更新時刻、ノード状態
-- 教室詳細：今日の推移グラフ
+- 部屋カード：段階表示（色＋文字）、推定人数の目安、最終更新時刻、ノード状態
+- 部屋詳細：今日の推移グラフ
 - スマホで見やすいレスポンシブ表示
 - 実人数を入力する簡易フォーム（校正データ収集用、管理トークン必須）
 

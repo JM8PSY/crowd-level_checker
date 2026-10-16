@@ -121,7 +121,7 @@ def test_anon_cannot_write_or_read_nodes(db):
         call(db, "insert into public.rooms values ('x', 'x') returning id")
     # nodes は RLS で行が見えない（トークンのハッシュを公開しない）
     assert call(db, "select count(*) from public.nodes") == 0
-    assert call(db, "select count(*) from public.rooms") == 1
+    assert call(db, "select count(*) from public.rooms where id = 'r1'") == 1
     with pytest.raises(psycopg.Error):
         call(db, "select private.add_node('x', 'r1')")
     with pytest.raises(psycopg.Error):
@@ -160,7 +160,8 @@ def test_offline_node_has_no_estimate(db):
 def test_room_without_nodes(db):
     admin(db, "select private.add_room('r2', '教室2')")
     rooms = call(db, "select public.get_rooms()")["rooms"]
-    assert [r["id"] for r in rooms] == ["r1", "r2"]
+    # 表示順（sort_order）→ ID 順。r1 / r2 は sort_order 0、休憩室は 1 / 2
+    assert [r["id"] for r in rooms] == ["r1", "r2", "rest-3f", "rest-2f"]
     assert rooms[1]["nodes"] == [] and rooms[1]["level"] is None
 
 
@@ -232,3 +233,59 @@ def test_history_uses_each_observations_estimator(db):
     submit(db, obs(t - timedelta(minutes=1), estimator={"feature": "-80", "coef": 1}))
     h = call(db, "select public.get_room_history('r1', %s, %s)", (t - timedelta(hours=1), t + timedelta(hours=1)))
     assert [p["estimated_people"] for p in h["points"]] == [20, 15.5]
+
+
+# ---- 部屋の切り替え（20261017010000_selectable_rooms.sql）----
+
+def test_rest_rooms_exist_with_floor(db):
+    rooms = {r["id"]: r for r in call(db, "select public.get_rooms()")["rooms"]}
+    assert rooms["rest-3f"]["name"] == "3F休憩室" and rooms["rest-3f"]["floor"] == "3F"
+    assert rooms["rest-2f"]["name"] == "2F休憩室" and rooms["rest-2f"]["floor"] == "2F"
+
+
+def test_room_id_in_payload_moves_node(db):
+    t = recent()
+    assert submit(db, obs(t, room_id="rest-2f"))["created"] == 1
+    assert admin(db, "select room_id from public.observations")[0] == "rest-2f"
+    assert admin(db, "select room_id from public.nodes where id = 'r1-01'")[0] == "rest-2f"
+    rooms = {r["id"]: r for r in call(db, "select public.get_rooms()")["rooms"]}
+    assert rooms["rest-2f"]["estimated_people"] == 20
+    assert [n["id"] for n in rooms["rest-2f"]["nodes"]] == ["r1-01"]
+    assert rooms["r1"]["nodes"] == [] and rooms["r1"]["level"] is None
+
+
+def test_room_id_omitted_uses_current_room(db):
+    submit(db, obs(recent() - timedelta(minutes=1), room_id="rest-3f"))
+    submit(db, obs(recent()))
+    assert admin(db, "select array_agg(room_id order by observed_at) from public.observations")[0] == ["rest-3f", "rest-3f"]
+
+
+def test_resend_of_older_window_does_not_move_node_back(db):
+    t = recent()
+    submit(db, obs(t, room_id="rest-2f"))
+    # 3F にいたころの古い窓が遅れて届いても、ノードは 2F のまま
+    submit(db, obs(t - timedelta(minutes=5), room_id="rest-3f"))
+    assert admin(db, "select room_id from public.nodes where id = 'r1-01'")[0] == "rest-2f"
+
+
+def test_unknown_or_inactive_room_is_rejected(db):
+    with pytest.raises(psycopg.Error, match="部屋"):
+        submit(db, obs(recent(), room_id="rest-9f"))
+    admin(db, "select private.set_room('rest-2f', '2F休憩室', '2F', 2, false)")
+    with pytest.raises(psycopg.Error, match="部屋"):
+        submit(db, obs(recent(), room_id="rest-2f"))
+    assert "rest-2f" not in [r["id"] for r in call(db, "select public.get_rooms()")["rooms"]]
+
+
+def test_get_rooms_filter(db):
+    rooms = call(db, "select public.get_rooms(%s)", ("rest-3f",))["rooms"]
+    assert [r["id"] for r in rooms] == ["rest-3f"]
+    assert call(db, "select public.get_rooms(%s)", ("nope",))["rooms"] == []
+
+
+def test_inactive_room_history_still_readable(db):
+    t = recent()
+    submit(db, obs(t))
+    admin(db, "select private.set_room('r1', '教室1', null, 0, false)")
+    h = call(db, "select public.get_room_history('r1', %s, %s)", (t - timedelta(hours=1), t + timedelta(hours=1)))
+    assert len(h["points"]) == 1
