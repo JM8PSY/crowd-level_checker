@@ -10,8 +10,11 @@ import kotlinx.serialization.json.jsonObject
 
 /** Supabase の submit_observations に送る JSON を作る */
 object ApiPayload {
-    /** 端末内ログにだけ載せるキー。devices は端末ごとの要約（ハッシュを含む）なので絶対に送らない */
-    private val LOCAL_ONLY_KEYS = setOf("devices", "adv_count", "estimated_people", "excluded")
+    /**
+     * 端末内ログにだけ載せるキー。devices は端末ごとの要約（ハッシュを含む）なので絶対に送らない。
+     * adv_count（窓内の受信パケット数）は監視に使うので送る（2026-10-17〜）
+     */
+    private val LOCAL_ONLY_KEYS = setOf("devices", "estimated_people", "excluded")
 
     /**
      * 1窓分の観測値（送信キューに保存する形）。

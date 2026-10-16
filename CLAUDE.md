@@ -65,6 +65,7 @@
 - 管理操作（部屋・ノード登録、トークン発行、校正値登録）は SQL Editor から private.* の関数で行う
 - 推定：採用する特徴量（初期値は counts_by_rssi["-80"]）に線形係数を掛けて推定人数を出し、閾値で「空き／やや混雑／混雑」に変換する。式（特徴量・係数・切片）はノードが観測値に estimator として添えて送り（スマホの設定画面の式）、サーバはその式で推定する（2026-10-17〜）。式のない観測と段階の閾値は calibrations テーブルから読む
 - 最終受信から3分を超えたノードは offline と表示する
+- 監視：10分ごとにノードの状況（電池、届いた窓・欠け、pkt/分、画面、未送信）を Discord の Webhook に投稿する（pg_cron + pg_net。URL は private.settings と supabase/.env にだけ置く）
 
 ## 3. Webページ（/web）
 - ビルド不要の素のHTML/CSS/JS＋Chart.js（CDN）

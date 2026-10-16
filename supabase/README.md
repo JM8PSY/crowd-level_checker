@@ -44,6 +44,32 @@ select private.set_calibration('room-3A', '-80', 0.8, 0, 15, 30, 'メモ');  -- 
 部屋は 3F休憩室（`rest-3f`）と 2F休憩室（`rest-2f`）。試験用だった `room-1` は使わない部屋（`active = false`）にしてあり、データは残っています。
 デモデータ（demo-3A / demo-3B）は `seed_demo.sql` を実行すると作り直せます（2026-10-17 に削除済み）。消す SQL は同じファイルの末尾にあります。
 
+## ノードの監視（Discord）
+
+10分ごとに、ノードごとの直近10分の状況を Discord の Webhook に投稿します（pg_cron のジョブ `node-report` → `private.send_node_report()`）。
+
+```
+**ノード状況** 10/17 08:09（直近10分 07:59〜）
+🟢 **room-1-02**｜3F休憩室｜電池 76%（充電中）
+　窓 8/10（**欠け 2**）｜3420 pkt/分｜端末 15台｜推定 1.7人
+　画面 ON｜未送信 0｜無受信による再起動 0回
+```
+
+- 窓：直近10分（今の分の1分前まで）に届いた窓の数。部分的な窓（起動直後・部屋の切り替え）や通信できなかった分は「欠け」になる。あとで再送されれば次の報告から数に入る
+- 遅れて届いた窓：観測から3分以上たって届いた窓（再送）
+- pkt/分・端末：受信パケット数と端末数の平均。pkt/分が急に減ったらスキャンが止まりかけている
+- 画面・未送信・無受信による再起動：ノードが観測値に添えて送る `diag`（最新の窓の値）。画面 OFF だとフィルタなしのスキャンが止まる
+- 🔴 は最終受信から3分を超えたノード（停止）
+
+```sql
+select private.set_discord_webhook('https://discord.com/api/webhooks/...');  -- 設定・変更（URL は supabase/.env にも控える）
+select private.set_discord_webhook('');                                      -- 送信を止める
+select private.node_report_text();                                           -- 本文だけを確かめる
+select private.send_node_report();                                           -- 今すぐ1回送る
+select status, start_time from cron.job_run_details order by start_time desc limit 5;   -- 実行の記録
+select status_code, error_msg from net._http_response order by created desc limit 5;  -- Discord の応答（204 が成功）
+```
+
 ## 端末内ログの取り込み
 
 ```powershell

@@ -289,3 +289,38 @@ def test_inactive_room_history_still_readable(db):
     admin(db, "select private.set_room('r1', '教室1', null, 0, false)")
     h = call(db, "select public.get_room_history('r1', %s, %s)", (t - timedelta(hours=1), t + timedelta(hours=1)))
     assert len(h["points"]) == 1
+
+
+# ---- ノードの監視（20261017020000_node_monitoring.sql）----
+
+def test_diag_is_stored(db):
+    submit(db, obs(recent(), diag={"screen_on": False, "queued": 3, "no_result_restarts": 2}))
+    assert admin(db, "select diag from public.observations")[0] == {"screen_on": False, "queued": 3, "no_result_restarts": 2}
+    submit(db, obs(recent() - timedelta(minutes=1), diag="x"))
+    assert admin(db, "select count(*) from public.observations where diag is null")[0] == 1
+
+
+def test_node_report_text(db):
+    admin(db, "select private.set_room('rest-3f', '3F休憩室', '3F', 1)")
+    token2 = admin(db, "select private.add_node('n-2', 'rest-3f')")[0]
+    now = datetime.now(JST).replace(second=30, microsecond=0)
+    base = now.replace(second=0) - timedelta(minutes=11)
+    # r1-01: 10窓のうち8窓、最後の窓に画面 OFF
+    for i in range(8):
+        submit(db, obs(base + timedelta(minutes=i), room_id="rest-3f",
+                       diag={"screen_on": i < 7, "queued": 0, "no_result_restarts": i}))
+    # n-2: 窓なし・最終受信は1時間前（停止）
+    submit(db, {**obs(base - timedelta(hours=1), room_id="rest-3f"), "node_id": "n-2"}, token=token2)
+    admin(db, "update public.nodes set last_seen_at = now() - interval '1 hour' where id = 'n-2'")
+    text = admin(db, "select private.node_report_text(%s)", (now,))[0]
+    lines = text.splitlines()
+    assert lines[0].startswith("**ノード状況**")
+    assert "🔴 **n-2**｜3F休憩室" in text and "**停止**" in text
+    assert "🟢 **r1-01**｜3F休憩室｜電池 100%（充電中）" in text
+    assert "窓 8/10（**欠け 2**）" in text
+    assert "画面 **OFF**｜未送信 0｜無受信による再起動 7回" in text
+    assert "窓 0/10（**欠け 10**）" in text
+
+
+def test_send_node_report_without_webhook_does_nothing(db):
+    admin(db, "select private.send_node_report()")

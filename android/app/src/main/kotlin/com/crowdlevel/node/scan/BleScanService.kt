@@ -23,6 +23,7 @@ import androidx.lifecycle.lifecycleScope
 import com.crowdlevel.node.BuildConfig
 import com.crowdlevel.node.R
 import com.crowdlevel.node.aggregate.AddressHasher
+import com.crowdlevel.node.aggregate.NodeDiag
 import com.crowdlevel.node.aggregate.ScanEvent
 import com.crowdlevel.node.aggregate.WindowAggregator
 import com.crowdlevel.node.aggregate.WindowResult
@@ -315,10 +316,17 @@ class BleScanService : LifecycleService() {
             // 窓の途中で部屋を切り替えたら、その窓は2部屋の観測が混ざるので送らない
             if (roomChangedAtMillis > result.windowStartMillis) s.copy(partial = true) else s
         }
+        val st = ScanStatusHolder.status.value
+        val diag = NodeDiag(
+            screenOn = getSystemService(PowerManager::class.java).isInteractive,
+            queued = st.apiUpload?.queued,
+            restarts = st.restartCount,
+            noResultRestarts = st.noResultRestartCount,
+        )
         val estimator = c.estimator()
         val estimate = estimator.estimate(summary.countsByRssi)
         // 端末内ログには、生の集計値に加えて Ambient に送る元になった推定人数も残す
-        val logged = summary.copy(estimatedPeople = estimate)
+        val logged = summary.copy(estimatedPeople = estimate, diag = diag)
         // 個人を識別できる値（ハッシュを含む）は logcat に出さない
         Log.i(
             TAG,
@@ -348,7 +356,7 @@ class BleScanService : LifecycleService() {
         uploader?.submit(result.windowStartMillis, estimate.takeUnless { summary.isPartial })
         // Supabase へは生の集計値と推定の式を送り、サーバがその式で推定する（画面の推定人数と同じ式）。送信失敗でもスキャンは止めない
         apiUploader?.let { u ->
-            runCatching { u.submit(summary, result.windowStartMillis, estimator) }
+            runCatching { u.submit(summary.copy(diag = diag), result.windowStartMillis, estimator) }
                 .onFailure { e -> Log.e(TAG, "送信キューへの追加に失敗", e) }
         }
         updateNotification()

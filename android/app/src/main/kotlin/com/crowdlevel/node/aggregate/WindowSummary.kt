@@ -22,6 +22,18 @@ data class DeviceSummaryJson(
     @SerialName("skip") val skipReason: String? = null,
 )
 
+/** 窓を確定した時点の端末の状態。サーバの監視（10分ごとの Discord への報告）に使う */
+@Serializable
+data class NodeDiag(
+    /** 画面が点いているか。消えているとフィルタなしのスキャンが止まる */
+    @SerialName("screen_on") val screenOn: Boolean,
+    /** Supabase への送信待ちの件数（この窓を入れる前） */
+    val queued: Int? = null,
+    /** スキャン開始からの、定期の再起動と無受信による再起動の回数 */
+    val restarts: Int,
+    @SerialName("no_result_restarts") val noResultRestarts: Int,
+)
+
 /**
  * 1窓の集計結果の JSON 表現。
  * 送信ペイロード（CLAUDE.md の例）と同じキーを持ち、デバッグ時のみ devices を含む。
@@ -44,6 +56,8 @@ data class WindowSummary(
     @SerialName("app_version") val appVersion: String,
     /** 端末で計算した推定人数（校正前の暫定の式）。端末内ログにだけ載せ、未計算なら省略する */
     @SerialName("estimated_people") val estimatedPeople: Int? = null,
+    /** 端末の状態（監視用）。送信する */
+    val diag: NodeDiag? = null,
     /** 数えなかった端末の数（理由ごと、例 {"findmy": 3, "ibeacon": 1}）。端末内ログにだけ載せ、なければ省略する */
     val excluded: Map<String, Int>? = null,
     val devices: List<DeviceSummaryJson>? = null,

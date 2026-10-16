@@ -39,7 +39,6 @@ class ApiPayloadTest {
         val json = ApiPayload.observationJson(summary, estimator)
         val obj = Json.parseToJsonElement(json).jsonObject
         assertFalse("devices" in obj)
-        assertFalse("adv_count" in obj)
         assertFalse("estimated_people" in obj)
         assertFalse("excluded" in obj)
         // ハッシュが文字列として紛れ込んでいないこと
@@ -57,6 +56,7 @@ class ApiPayloadTest {
         assertEquals(1, obj["counts_by_vendor"]!!.jsonObject["apple"]!!.jsonPrimitive.int)
         assertTrue("rssi_stats" in obj)
         assertEquals(100, obj["battery"]!!.jsonPrimitive.int)
+        assertEquals(39, obj["adv_count"]!!.jsonPrimitive.int)  // 監視用に送る
     }
 
     @Test
@@ -74,5 +74,14 @@ class ApiPayloadTest {
         assertEquals("-60", est["feature"]!!.jsonPrimitive.content)
         assertEquals(0.5, est["coef"]!!.jsonPrimitive.double, 0.0)
         assertEquals(1.0, est["intercept"]!!.jsonPrimitive.double, 0.0)
+    }
+
+    @Test
+    fun `端末の状態は監視用に送る`() {
+        val withDiag = summary.copy(diag = com.crowdlevel.node.aggregate.NodeDiag(screenOn = false, queued = 2, restarts = 1, noResultRestarts = 3))
+        val diag = Json.parseToJsonElement(ApiPayload.observationJson(withDiag, estimator)).jsonObject["diag"]!!.jsonObject
+        assertEquals("false", diag["screen_on"]!!.jsonPrimitive.content)
+        assertEquals(2, diag["queued"]!!.jsonPrimitive.int)
+        assertEquals(3, diag["no_result_restarts"]!!.jsonPrimitive.int)
     }
 }

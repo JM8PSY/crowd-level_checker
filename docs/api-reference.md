@@ -209,7 +209,7 @@ PostgREST の書式で、テーブルを直接読めます。どれも `GET` で
 | `ground_truth` | 実人数。`id`, `room_id`, `observed_at`, `people`, `note`, `created_at` |
 | `calibrations` | 閾値と代わりの式の履歴。`id`, `room_id`, `feature`, `coef`, `intercept`, `threshold_moderate`, `threshold_crowded`, `note`, `created_at` |
 
-`observations` の列: `id`, `node_id`, `room_id`（観測したときの部屋）, `observed_at`, `received_at`, `window_sec`, `counts_by_rssi`, `counts_by_vendor`, `rssi_stats`, `adv_count`, `battery`, `charging`, `app_version`, `estimator`（推定の式。ない観測は `null`）
+`observations` の列: `id`, `node_id`, `room_id`（観測したときの部屋）, `observed_at`, `received_at`, `window_sec`, `counts_by_rssi`, `counts_by_vendor`, `rssi_stats`, `adv_count`, `battery`, `charging`, `app_version`, `estimator`（推定の式。ない観測は `null`）, `diag`（端末の状態。ない観測は `null`）
 
 ### よく使う書き方
 
@@ -283,9 +283,10 @@ curl -X POST "https://vxhbjnbsrfopczqxqbhp.supabase.co/rest/v1/rpc/submit_observ
 | `counts_by_rssi` | ○ | オブジェクト | 窓内のユニーク端末のうち、最大 RSSI がその値以上の数（累積）。キー `-60` / `-70` / `-80` / `-90` / `all`。Android アプリは、Apple の「探す」だけ・iBeacon だけを出しているアドレスを数えない（同じ端末の二重カウントと固定ビーコンを外すため。`counts_by_vendor` と `rssi_stats` も同じ） |
 | `counts_by_vendor` | ○ | オブジェクト | メーカー別の端末数。キー `apple` / `google` / `microsoft` / `samsung` / `other` / `none` |
 | `rssi_stats` | | オブジェクト / null | 端末ごとの最大 RSSI の `median` / `p10` / `p90` |
-| `adv_count` | | 整数 | 受信したパケット数 |
+| `adv_count` | | 整数 | 窓内に受信したパケット数。監視に使う |
 | `battery` / `charging` / `app_version` | | | 端末の状態 |
 | `estimator` | | オブジェクト | 推定の式 `{"feature": "-60", "coef": 0.5, "intercept": 0}`。`feature` は `-60` / `-70` / `-80` / `-90` / `all`、`coef` と `intercept` は数値（`intercept` は省くと0）。省くとサーバの代わりの式で推定する。Android アプリは設定画面の式を必ず添える |
+| `diag` | | オブジェクト | 端末の状態（監視用）。Android アプリは `{"screen_on": true, "queued": 0, "restarts": 0, "no_result_restarts": 0}`（画面が点いているか、送信待ちの件数、スキャン開始からの定期再起動・無受信による再起動の回数）を送る。オブジェクトでなければ捨てる |
 | `partial` | | 真偽 | `true` なら観測が欠けた窓。保存せず `ignored_partial` に数える |
 
 ほかのキーは無視して保存しません。
