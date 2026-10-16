@@ -148,6 +148,24 @@ fun DashboardScreen(
             }
         }
 
+        // ---- Supabase 送信 ----
+        Card {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Supabase 送信", style = MaterialTheme.typography.titleMedium)
+                val up = status.apiUpload
+                if (up == null) {
+                    Text("OFF（設定の URL・キー・ノードのトークンが揃うと送信します）")
+                } else {
+                    Text("ON  ノード ${config.nodeId}（${config.sendIntervalSec}秒ごと）")
+                    Text("送信済み ${up.sentCount}件 / 失敗 ${up.failedCount}回 / 未送信 ${up.queued}件（端末内に保存）")
+                    Text("最終成功 ${fmtTime(up.lastSuccessMillis)} / 最終試行 ${fmtTime(up.lastAttemptMillis)}")
+                    up.lastMessage?.let {
+                        Text(it, color = if (it.startsWith("OK")) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
+
         // ---- Ambient 送信 ----
         Card {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

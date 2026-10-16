@@ -5,14 +5,15 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
-// local.properties（git 管理外）から Ambient の既定値を読む。未設定なら空文字
+// local.properties（git 管理外）から Ambient・Supabase・ノードの既定値を読む。未設定なら空文字
 val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
-fun localProp(key: String): String = localProps.getProperty(key, "")
+fun localProp(key: String, default: String = ""): String = localProps.getProperty(key, default)
 
 android {
     namespace = "com.crowdlevel.node"
@@ -27,6 +28,12 @@ android {
 
         buildConfigField("String", "AMBIENT_CHANNEL_ID", "\"${localProp("AMBIENT_CHANNEL_ID")}\"")
         buildConfigField("String", "AMBIENT_WRITE_KEY", "\"${localProp("AMBIENT_WRITE_KEY")}\"")
+        // 送信先の Supabase。publishable key は公開してよいキーなので、既定値をここに書いておく（web/config.js と同じ）
+        buildConfigField("String", "SUPABASE_URL", "\"${localProp("SUPABASE_URL", "https://vxhbjnbsrfopczqxqbhp.supabase.co")}\"")
+        buildConfigField("String", "SUPABASE_KEY", "\"${localProp("SUPABASE_KEY", "sb_publishable_w5olGvZMCO96K-nPwrZ6cQ_koLNE93d")}\"")
+        // ノード ID とトークンは端末ごとに違う。local.properties に書けば、その値を既定値にしてビルドできる
+        buildConfigField("String", "NODE_ID", "\"${localProp("NODE_ID", "node-01")}\"")
+        buildConfigField("String", "NODE_TOKEN", "\"${localProp("NODE_TOKEN")}\"")
     }
 
     buildTypes {
@@ -72,6 +79,9 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

@@ -32,6 +32,8 @@ import com.crowdlevel.node.settings.NodeConfig
 import com.crowdlevel.node.settings.NodeSettings
 import com.crowdlevel.node.ui.MainActivity
 import com.crowdlevel.node.upload.AmbientUploader
+import com.crowdlevel.node.upload.api.ApiUploader
+import com.crowdlevel.node.upload.api.QueueDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -71,6 +73,7 @@ class BleScanService : LifecycleService() {
     private var tickerJob: Job? = null
     private var retryJob: Job? = null
     private var uploadStatusJob: Job? = null
+    private var apiStatusJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var packetCounter = 0
     private var lastStartMillis = 0L
@@ -80,6 +83,7 @@ class BleScanService : LifecycleService() {
     @Volatile private var config: NodeConfig = NodeConfig.DEFAULT
     @Volatile private var logger: JsonlLogger? = null
     @Volatile private var uploader: AmbientUploader? = null
+    @Volatile private var apiUploader: ApiUploader? = null
 
     private val zone: ZoneId = ZoneId.systemDefault()
 
@@ -121,6 +125,7 @@ class BleScanService : LifecycleService() {
                 config = c
                 logger = if (c.debugLog) JsonlLogger(logDir(this@BleScanService), zone) else null
                 rebuildUploader(c)
+                rebuildApiUploader(c)
             }
         }
     }
@@ -145,6 +150,7 @@ class BleScanService : LifecycleService() {
         retryJob?.cancel()
         scanner?.stop()
         uploader?.close()
+        apiUploader?.close()
         releaseWakeLock()
         runCatching { unregisterReceiver(bluetoothStateReceiver) }
         ScanStatusHolder.update { it.copy(serviceRunning = false, scanning = false) }
@@ -169,6 +175,29 @@ class BleScanService : LifecycleService() {
         uploader = u
         uploadStatusJob = lifecycleScope.launch {
             u.status.collect { st -> ScanStatusHolder.update { it.copy(upload = st) } }
+        }
+    }
+
+    /** Supabase の送信設定が変わったら送信器を作り直す（未送信分は端末内のキューに残る） */
+    private fun rebuildApiUploader(c: NodeConfig) {
+        val enabled = c.apiUrl.isNotBlank() && c.apiKey.isNotBlank() && c.apiToken.isNotBlank() && c.nodeId.isNotBlank()
+        val current = apiUploader
+        if (enabled && current != null && current.baseUrl == c.apiUrl && current.apiKey == c.apiKey &&
+            current.nodeToken == c.apiToken && current.nodeId == c.nodeId && current.sendIntervalSec == c.sendIntervalSec
+        ) return
+        current?.close()
+        apiStatusJob?.cancel()
+        if (!enabled) {
+            apiUploader = null
+            ScanStatusHolder.update { it.copy(apiUpload = null) }
+            return
+        }
+        val u = ApiUploader(
+            lifecycleScope, QueueDatabase.get(this).pending(), c.nodeId, c.apiUrl, c.apiKey, c.apiToken, c.sendIntervalSec,
+        )
+        apiUploader = u
+        apiStatusJob = lifecycleScope.launch {
+            u.status.collect { st -> ScanStatusHolder.update { it.copy(apiUpload = st) } }
         }
     }
 
@@ -263,7 +292,7 @@ class BleScanService : LifecycleService() {
         lifecycleScope.launch(publishDispatcher) { publish(result) }
     }
 
-    private fun publish(result: WindowResult) {
+    private suspend fun publish(result: WindowResult) {
         val c = config
         val battery = readBattery()
         val summary = WindowSummary.from(
@@ -305,6 +334,11 @@ class BleScanService : LifecycleService() {
         }
         // 部分的な窓も渡す（送る値には使わないが、Ambient の区間を閉じるきっかけになる）
         uploader?.submit(result.windowStartMillis, estimate.takeUnless { summary.isPartial })
+        // Supabase へは生の集計値を送る（推定はサーバ側で行う）。送信失敗でもスキャンは止めない
+        apiUploader?.let { u ->
+            runCatching { u.submit(summary, result.windowStartMillis) }
+                .onFailure { e -> Log.e(TAG, "送信キューへの追加に失敗", e) }
+        }
         updateNotification()
     }
 

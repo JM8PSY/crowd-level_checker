@@ -21,7 +21,11 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 /** 設定値のスナップショット */
 data class NodeConfig(
     val nodeId: String,
+    /** 送信先の Supabase の URL（https://<ref>.supabase.co） */
     val apiUrl: String,
+    /** Supabase の publishable key（公開してよいキー） */
+    val apiKey: String,
+    /** ノードのトークン（SQL Editor の private.add_node で発行したもの） */
     val apiToken: String,
     val sendIntervalSec: Int,
     val debugLog: Boolean,
@@ -42,11 +46,12 @@ data class NodeConfig(
     fun estimator(): Estimator = Estimator(estimateFeature, estimateSlope, estimateIntercept)
 
     companion object {
-        /** Ambient の既定値は local.properties → BuildConfig から読む（リポジトリには含めない） */
+        /** Ambient・ノードの既定値は local.properties → BuildConfig から読む（リポジトリには含めない） */
         val DEFAULT = NodeConfig(
-            nodeId = "node-01",
-            apiUrl = "",
-            apiToken = "",
+            nodeId = BuildConfig.NODE_ID,
+            apiUrl = BuildConfig.SUPABASE_URL,
+            apiKey = BuildConfig.SUPABASE_KEY,
+            apiToken = BuildConfig.NODE_TOKEN,
             sendIntervalSec = 60,
             debugLog = true,
             keepScreenOn = true,
@@ -71,6 +76,7 @@ class NodeSettings(private val context: Context) {
     private object Keys {
         val NODE_ID = stringPreferencesKey("node_id")
         val API_URL = stringPreferencesKey("api_url")
+        val API_KEY = stringPreferencesKey("api_key")
         val API_TOKEN = stringPreferencesKey("api_token")
         val SEND_INTERVAL_SEC = intPreferencesKey("send_interval_sec")
         val DEBUG_LOG = booleanPreferencesKey("debug_log")
@@ -89,8 +95,10 @@ class NodeSettings(private val context: Context) {
         val d = NodeConfig.DEFAULT
         NodeConfig(
             nodeId = p[Keys.NODE_ID] ?: d.nodeId,
-            apiUrl = p[Keys.API_URL] ?: d.apiUrl,
-            apiToken = p[Keys.API_TOKEN] ?: d.apiToken,
+            // 空で保存されている（Phase 1 で未使用だった）ときはビルド時の既定値を使う
+            apiUrl = p[Keys.API_URL]?.takeIf { it.isNotBlank() } ?: d.apiUrl,
+            apiKey = p[Keys.API_KEY]?.takeIf { it.isNotBlank() } ?: d.apiKey,
+            apiToken = p[Keys.API_TOKEN]?.takeIf { it.isNotBlank() } ?: d.apiToken,
             sendIntervalSec = p[Keys.SEND_INTERVAL_SEC] ?: d.sendIntervalSec,
             debugLog = p[Keys.DEBUG_LOG] ?: d.debugLog,
             keepScreenOn = p[Keys.KEEP_SCREEN_ON] ?: d.keepScreenOn,
@@ -116,6 +124,7 @@ class NodeSettings(private val context: Context) {
         context.dataStore.edit { p ->
             p[Keys.NODE_ID] = config.nodeId
             p[Keys.API_URL] = config.apiUrl
+            p[Keys.API_KEY] = config.apiKey
             p[Keys.API_TOKEN] = config.apiToken
             p[Keys.SEND_INTERVAL_SEC] = config.sendIntervalSec
             p[Keys.DEBUG_LOG] = config.debugLog

@@ -26,7 +26,10 @@ data class ScanStatus(
     val restartCount: Int = 0,
     /** 結果が途絶えたことによる再起動の回数 */
     val noResultRestartCount: Int = 0,
+    /** Ambient への送信状態 */
     val upload: UploadStatus? = null,
+    /** Supabase への送信状態。設定が揃っていなければ null */
+    val apiUpload: UploadStatus? = null,
 )
 
 object ScanStatusHolder {

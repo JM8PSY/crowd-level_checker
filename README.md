@@ -38,6 +38,14 @@ export JAVA_HOME=/path/to/jdk-17
 ```
 
 `android/local.properties` に `sdk.dir=<Android SDK のパス>` を書きます（git には含めません）。
+Supabase へ送るには、同じファイルにノード ID とトークン（`supabase/README.md` の `private.add_node` で発行）を書きます。設定画面で入れることもできます。
+
+```properties
+NODE_ID=room-1-01
+NODE_TOKEN=<発行されたトークン>
+```
+
+送信の仕組みは `docs/phase2-supabase.md` にあります。
 動作確認用に Ambient へ送る場合は、同じファイルに `AMBIENT_CHANNEL_ID` と `AMBIENT_WRITE_KEY` も書きます。
 Ambient には推定人数だけを送ります。複数のノードで1つのチャネル（1つのグラフ）を共有し、ノードごとに設定画面で d1〜d8 の番号を重ならないように割り当てます（詳細は `docs/phase1-android-design.md`）。
 

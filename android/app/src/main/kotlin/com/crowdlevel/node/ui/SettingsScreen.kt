@@ -37,6 +37,7 @@ import com.crowdlevel.node.upload.AmbientSchedule
 fun SettingsScreen(config: NodeConfig, onSave: (NodeConfig) -> Unit, onBack: () -> Unit) {
     var nodeId by rememberSaveable { mutableStateOf(config.nodeId) }
     var apiUrl by rememberSaveable { mutableStateOf(config.apiUrl) }
+    var apiKey by rememberSaveable { mutableStateOf(config.apiKey) }
     var apiToken by rememberSaveable { mutableStateOf(config.apiToken) }
     var sendInterval by rememberSaveable { mutableStateOf(config.sendIntervalSec.toString()) }
     var debugLog by rememberSaveable { mutableStateOf(config.debugLog) }
@@ -66,9 +67,10 @@ fun SettingsScreen(config: NodeConfig, onSave: (NodeConfig) -> Unit, onBack: () 
     ) {
         Text("設定", style = MaterialTheme.typography.headlineSmall)
         OutlinedTextField(value = nodeId, onValueChange = { nodeId = it }, label = { Text("ノードID") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(value = apiUrl, onValueChange = { apiUrl = it }, label = { Text("API URL（Phase 2 で使用）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = apiUrl, onValueChange = { apiUrl = it }, label = { Text("Supabase の URL") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = apiKey, onValueChange = { apiKey = it }, label = { Text("Supabase の publishable key") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(
-            value = apiToken, onValueChange = { apiToken = it }, label = { Text("API トークン（Phase 2 で使用）") },
+            value = apiToken, onValueChange = { apiToken = it }, label = { Text("ノードのトークン") },
             singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
@@ -152,6 +154,7 @@ fun SettingsScreen(config: NodeConfig, onSave: (NodeConfig) -> Unit, onBack: () 
                         NodeConfig(
                             nodeId = nodeId.trim(),
                             apiUrl = apiUrl.trim(),
+                            apiKey = apiKey.trim(),
                             apiToken = apiToken.trim(),
                             sendIntervalSec = intervalValue ?: config.sendIntervalSec,
                             debugLog = debugLog,
