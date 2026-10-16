@@ -195,3 +195,40 @@ def test_ground_truth(db):
     assert r["people"] == 18
     h = call(db, "select public.get_room_history('r1', %s, %s)", (t - timedelta(hours=1), t + timedelta(hours=1)))
     assert h["ground_truth"][0]["people"] == 18
+
+
+# ---- 推定の式をノードから受け取る（20261017000000_estimator_from_node.sql）----
+
+def test_estimator_from_node_is_used(db):
+    # -60 の端末数 2 × 0.5 + 1 = 2
+    submit(db, obs(recent(), estimator={"feature": "-60", "coef": 0.5, "intercept": 1}))
+    room = call(db, "select public.get_rooms()")["rooms"][0]
+    assert room["estimated_people"] == 2
+    assert room["level"] == "empty"
+    assert room["nodes"][0]["estimator"] == {"feature": "-60", "coef": 0.5, "intercept": 1}
+
+
+def test_estimator_intercept_defaults_to_zero_and_extra_keys_dropped(db):
+    submit(db, obs(recent(), estimator={"feature": "-70", "coef": 2, "note": "x"}))
+    row = admin(db, "select estimator from public.observations")
+    assert row[0] == {"feature": "-70", "coef": 2, "intercept": 0}
+    assert call(db, "select public.get_rooms()")["rooms"][0]["estimated_people"] == 20  # 10 × 2
+
+
+def test_invalid_estimator_is_rejected(db):
+    for bad in ({"feature": "-50", "coef": 1}, {"feature": "-60"}, {"feature": "-60", "coef": "1"}, "x"):
+        with pytest.raises(psycopg.Error, match="estimator"):
+            submit(db, obs(recent(), estimator=bad))
+    assert admin(db, "select count(*) from public.observations")[0] == 0
+
+
+def test_history_uses_each_observations_estimator(db):
+    token2 = admin(db, "select private.add_node('r1-02', 'r1')")[0]
+    t = recent()
+    # ノード1は自分の式（-60 × 0.5 → 1）、ノード2は式なし（既定 -80 × 1 → 30）。平均 15.5
+    submit(db, obs(t, estimator={"feature": "-60", "coef": 0.5}))
+    submit(db, {**obs(t, c80=30), "node_id": "r1-02"}, token=token2)
+    # 式を変えても、過去の点はそのときの式のまま
+    submit(db, obs(t - timedelta(minutes=1), estimator={"feature": "-80", "coef": 1}))
+    h = call(db, "select public.get_room_history('r1', %s, %s)", (t - timedelta(hours=1), t + timedelta(hours=1)))
+    assert [p["estimated_people"] for p in h["points"]] == [20, 15.5]

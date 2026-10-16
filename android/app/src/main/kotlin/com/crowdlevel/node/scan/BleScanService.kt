@@ -304,7 +304,8 @@ class BleScanService : LifecycleService() {
             appVersion = BuildConfig.VERSION_NAME,
             includeDevices = c.debugLog,
         )
-        val estimate = c.estimator().estimate(summary.countsByRssi)
+        val estimator = c.estimator()
+        val estimate = estimator.estimate(summary.countsByRssi)
         // 端末内ログには、生の集計値に加えて Ambient に送る元になった推定人数も残す
         val logged = summary.copy(estimatedPeople = estimate)
         // 個人を識別できる値（ハッシュを含む）は logcat に出さない
@@ -334,9 +335,9 @@ class BleScanService : LifecycleService() {
         }
         // 部分的な窓も渡す（送る値には使わないが、Ambient の区間を閉じるきっかけになる）
         uploader?.submit(result.windowStartMillis, estimate.takeUnless { summary.isPartial })
-        // Supabase へは生の集計値を送る（推定はサーバ側で行う）。送信失敗でもスキャンは止めない
+        // Supabase へは生の集計値と推定の式を送り、サーバがその式で推定する（画面の推定人数と同じ式）。送信失敗でもスキャンは止めない
         apiUploader?.let { u ->
-            runCatching { u.submit(summary, result.windowStartMillis) }
+            runCatching { u.submit(summary, result.windowStartMillis, estimator) }
                 .onFailure { e -> Log.e(TAG, "送信キューへの追加に失敗", e) }
         }
         updateNotification()

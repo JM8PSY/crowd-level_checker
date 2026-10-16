@@ -1,7 +1,7 @@
 # API リファレンス
 
 BLE教室混雑度推定システムの API です。Supabase（Postgres + PostgREST）の REST API をそのまま使います。
-2026-10-16 時点の内容で、例はすべて実際に呼んで確かめています。
+2026-10-17 時点の内容で、例はすべて実際に呼んで確かめています。
 外部サイトに組み込む手順は [外部サイトから混雑度を取得するガイド](external-api-guide.md) にあります。
 
 - [共通事項](#共通事項)
@@ -77,6 +77,7 @@ curl "https://vxhbjnbsrfopczqxqbhp.supabase.co/rest/v1/rpc/get_rooms" -H "apikey
           "id": "room-1-02", "status": "online",
           "last_seen_at": "2026-10-16T14:37:00.897395+00:00",
           "last_observed_at": "2026-10-16T14:36:00+00:00",
+          "estimator": {"feature": "-60", "coef": 0.5, "intercept": 0},
           "battery": 13, "charging": true, "app_version": "0.1.0"
         }
       ]
@@ -92,10 +93,11 @@ curl "https://vxhbjnbsrfopczqxqbhp.supabase.co/rest/v1/rpc/get_rooms" -H "apikey
 | `rooms[].level` | `"empty"` / `"moderate"` / `"crowded"` / `null` | 空き / やや混雑 / 混雑。稼働中のノードがなければ `null`（不明） |
 | `rooms[].estimated_people` | 数値 / `null` | 推定人数（小数1桁）。稼働中のノードの最新値から計算し、複数あれば平均 |
 | `rooms[].updated_at` | 時刻 / `null` | その教室で最も新しい観測の `observed_at` |
-| `rooms[].calibration` | オブジェクト | 推定に使っている式と閾値（下の「推定の仕組み」）。`calibrated: false` は校正前の既定値 |
+| `rooms[].calibration` | オブジェクト | 段階の閾値と、式の添えられていない観測に使う代わりの式（下の「推定の仕組み」）。`calibrated: false` は校正前の既定値 |
 | `rooms[].nodes[].status` | `"online"` / `"offline"` | 最終受信から3分以内なら `online` |
 | `rooms[].nodes[].last_seen_at` | 時刻 / `null` | 最後に送信を受けた時刻（再送分を受けたときも更新） |
 | `rooms[].nodes[].last_observed_at` | 時刻 / `null` | そのノードの最新の観測の `observed_at` |
+| `rooms[].nodes[].estimator` | オブジェクト / `null` | そのノードの最新の観測に添えられていた推定の式 |
 | `rooms[].nodes[].battery` / `charging` / `app_version` | | 最後の送信に含まれていた端末の状態 |
 
 #### 推定の仕組み
@@ -105,7 +107,12 @@ curl "https://vxhbjnbsrfopczqxqbhp.supabase.co/rest/v1/rpc/get_rooms" -H "apikey
 level   = 推定人数 ≥ threshold_crowded なら crowded、≥ threshold_moderate なら moderate、それ以外は empty
 ```
 
-`feature` は `counts_by_rssi` のキー（`-60` / `-70` / `-80` / `-90` / `all`）。教室ごとに `calibrations` の最新の行を使い、行がなければ既定値（`-80`、係数1、切片0、閾値 15 / 30）を使います。
+- **式（feature / coef / intercept）はノードが決めます。** ノードは観測値に `estimator`（スマホの設定画面の式）を添えて送り、サーバはその観測をその式で推定します。スマホの画面に出る推定人数と同じ値になります
+- 式は観測ごとに保存されるので、ノードの式をあとで変えても、過去の点はそのときの式のまま残ります
+- `estimator` のない観測（2026-10-17 0:20 より前のもの、式を送らないクライアント）は、`calibrations` の最新の行の式、行がなければ既定値（`-80`、係数1、切片0）で推定します
+- 閾値（`threshold_moderate` / `threshold_crowded`）は教室ごとに `calibrations` の最新の行から読み、行がなければ 15 / 30 です
+- `feature` は `counts_by_rssi` のキー（`-60` / `-70` / `-80` / `-90` / `all`）
+- 複数のノードがある教室では、ノードごとに推定してから平均します
 
 ### `get_room_history` — 推移
 
@@ -155,7 +162,7 @@ curl "https://vxhbjnbsrfopczqxqbhp.supabase.co/rest/v1/rpc/get_room_history?room
 | フィールド | 内容 |
 |---|---|
 | `points[]` | 観測時刻ごとに1点、古い順。同じ時刻に複数ノードの観測があれば `counts_by_rssi` は平均（小数1桁）、`nodes` はその数 |
-| `points[].estimated_people` / `level` | その時点の平均値に、**現在の**推定式と閾値を当てはめたもの（校正値を変えると過去の点も変わる） |
+| `points[].estimated_people` / `level` | その時刻の各観測を、それぞれに添えられていた式で推定した値の平均と、その段階（閾値は現在の値） |
 | `ground_truth[]` | 期間内に入力された実人数、古い順 |
 
 存在しない `room_id` でもエラーにはならず、`points` と `ground_truth` が空で返ります。
@@ -171,7 +178,7 @@ PostgREST の書式で、テーブルを直接読めます。どれも `GET` で
 | `ground_truth` | 実人数。`id`, `room_id`, `observed_at`, `people`, `note`, `created_at` |
 | `calibrations` | 推定式と閾値の履歴。`id`, `room_id`, `feature`, `coef`, `intercept`, `threshold_moderate`, `threshold_crowded`, `note`, `created_at` |
 
-`observations` の列: `id`, `node_id`, `room_id`（受信時点の所属教室）, `observed_at`, `received_at`, `window_sec`, `counts_by_rssi`, `counts_by_vendor`, `rssi_stats`, `adv_count`, `battery`, `charging`, `app_version`
+`observations` の列: `id`, `node_id`, `room_id`（受信時点の所属教室）, `observed_at`, `received_at`, `window_sec`, `counts_by_rssi`, `counts_by_vendor`, `rssi_stats`, `adv_count`, `battery`, `charging`, `app_version`, `estimator`（推定の式。ない観測は `null`）
 
 ### よく使う書き方
 
@@ -219,7 +226,8 @@ curl -X POST "https://vxhbjnbsrfopczqxqbhp.supabase.co/rest/v1/rpc/submit_observ
         "counts_by_rssi": {"-60": 5, "-70": 16, "-80": 20, "-90": 25, "all": 25},
         "counts_by_vendor": {"apple": 14, "google": 3, "microsoft": 2, "samsung": 1, "other": 5, "none": 0},
         "rssi_stats": {"median": -72, "p10": -88, "p90": -58},
-        "battery": 100, "charging": true, "app_version": "0.1.0"
+        "battery": 100, "charging": true, "app_version": "0.1.0",
+        "estimator": {"feature": "-60", "coef": 0.5, "intercept": 0}
       }]}'
 ```
 
@@ -241,6 +249,7 @@ curl -X POST "https://vxhbjnbsrfopczqxqbhp.supabase.co/rest/v1/rpc/submit_observ
 | `rssi_stats` | | オブジェクト / null | 端末ごとの最大 RSSI の `median` / `p10` / `p90` |
 | `adv_count` | | 整数 | 受信したパケット数 |
 | `battery` / `charging` / `app_version` | | | 端末の状態 |
+| `estimator` | | オブジェクト | 推定の式 `{"feature": "-60", "coef": 0.5, "intercept": 0}`。`feature` は `-60` / `-70` / `-80` / `-90` / `all`、`coef` と `intercept` は数値（`intercept` は省くと0）。省くとサーバの代わりの式で推定する。Android アプリは設定画面の式を必ず添える |
 | `partial` | | 真偽 | `true` なら観測が欠けた窓。保存せず `ignored_partial` に数える |
 
 ほかのキーは無視して保存しません。
@@ -269,7 +278,7 @@ POST /rpc/submit_ground_truth
 応答（200）: 登録した行
 
 ```json
-{"id": 61, "room_id": "demo-3A", "observed_at": "2026-10-16T14:00:06.779882+00:00", "people": 3, "note": "check"}
+{"id": 62, "room_id": "room-1", "observed_at": "2026-10-16T15:30:00+00:00", "people": 5, "note": "授業前"}
 ```
 
 ## エラー

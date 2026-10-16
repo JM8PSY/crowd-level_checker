@@ -2,6 +2,7 @@ package com.crowdlevel.node.upload.api
 
 import android.util.Log
 import com.crowdlevel.node.aggregate.WindowSummary
+import com.crowdlevel.node.estimate.Estimator
 import com.crowdlevel.node.upload.UploadStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,10 +48,13 @@ class ApiUploader(
         for (signal in wakeup) drain(force = false)
     }
 
-    /** 確定した窓を渡す。部分的な窓は送らない */
-    suspend fun submit(summary: WindowSummary, windowStartMillis: Long) {
+    /**
+     * 確定した窓を渡す。部分的な窓は送らない
+     * @param estimator その窓の推定に使った式。観測値に添えて送り、サーバも同じ式で推定する
+     */
+    suspend fun submit(summary: WindowSummary, windowStartMillis: Long, estimator: Estimator) {
         if (!summary.isPartial) {
-            dao.insert(PendingObservation(nodeId = summary.nodeId, windowStartMillis = windowStartMillis, json = ApiPayload.observationJson(summary)))
+            dao.insert(PendingObservation(nodeId = summary.nodeId, windowStartMillis = windowStartMillis, json = ApiPayload.observationJson(summary, estimator)))
             dao.trimTo(MAX_QUEUE)
             _status.update { it.copy(queued = dao.count()) }
         }

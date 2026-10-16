@@ -35,6 +35,19 @@ function todayStr() {
   const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
+/** 推定の式を文章にする。例: "-60 dBm以上の端末数 × 0.5 + 0" */
+function formulaText(e) {
+  const feature = e.feature === "all" ? "全端末数" : `${e.feature} dBm以上の端末数`;
+  return `${feature} × ${e.coef} + ${e.intercept ?? 0}`;
+}
+
+/** 教室の推定に使っている式。ノードが送ってきた式があればそれ、なければサーバの既定の式 */
+function roomFormula(r) {
+  const fromNodes = [...new Set(r.nodes.filter((n) => n.estimator).map((n) => formulaText(n.estimator)))];
+  if (fromNodes.length) return `ノードの設定：${fromNodes.join(" / ")}`;
+  return `${r.calibration.calibrated ? "校正値" : "未校正の既定値"}：${formulaText(r.calibration)}`;
+}
+
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
@@ -73,7 +86,7 @@ function renderRooms() {
         <div class="level"><span class="dot" aria-hidden="true"></span>${LEVEL_LABELS[r.level] ?? "不明"}</div>
         <div class="people">${people}</div>
         <div class="muted">最終観測 ${fmtTime(r.updated_at)}
-          ${r.calibration.calibrated ? "" : `<span class="uncal">（未校正：-80dBm以上の端末数をそのまま人数とみなしています）</span>`}</div>
+          <span class="uncal">（推定の式 ${esc(roomFormula(r))}）</span></div>
         <ul class="nodes">${nodes}</ul>
       </button>`;
   }).join("");
@@ -114,7 +127,7 @@ async function loadHistory() {
   }
   $("detail-title").textContent = `${room.name} の推移`;
   $("detail-note").textContent =
-    `推定に使う特徴量: ${h.feature} dBm 以上の端末数${h.calibrated ? "" : "（未校正の仮の式）"}。` +
+    `推定の式: ${roomFormula(room)}（各観測を、送られてきたときの式で計算）。` +
     `点線は段階の閾値（やや混雑 ${h.threshold_moderate}人 / 混雑 ${h.threshold_crowded}人）。観測 ${h.points.length} 点`;
   drawPeople(h, day);
   drawRaw(h, day);
