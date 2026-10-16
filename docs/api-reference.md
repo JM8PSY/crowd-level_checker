@@ -2,6 +2,7 @@
 
 BLE教室混雑度推定システムの API です。Supabase（Postgres + PostgREST）の REST API をそのまま使います。
 2026-10-16 時点の内容で、例はすべて実際に呼んで確かめています。
+外部サイトに組み込む手順は [外部サイトから混雑度を取得するガイド](external-api-guide.md) にあります。
 
 - [共通事項](#共通事項)
 - [混雑度を読む](#混雑度を読む)：`get_rooms` / `get_room_history`
