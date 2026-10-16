@@ -1,7 +1,22 @@
-// 教室の混雑度ページ。/api/v1/rooms を30秒ごとに読み直し、選んだ教室の推移をグラフにする
+// 教室の混雑度ページ。Supabase の get_rooms を30秒ごとに読み直し、選んだ教室の推移をグラフにする
 "use strict";
 
+// 接続先は config.js（window.CROWD_CONFIG）で決める
+const CONFIG = window.CROWD_CONFIG;
+
+/** Supabase の RPC（Postgres の関数）を呼ぶ。失敗したらメッセージ付きの Error を投げる */
+async function rpc(name, args = {}, extraHeaders = {}) {
+  const headers = { "Content-Type": "application/json", apikey: CONFIG.supabaseKey, ...extraHeaders };
+  // 旧形式の anon key（JWT）は Authorization にも付ける。新形式の publishable key は apikey だけでよい
+  if (CONFIG.supabaseKey.startsWith("eyJ")) headers.Authorization = `Bearer ${CONFIG.supabaseKey}`;
+  const res = await fetch(`${CONFIG.supabaseUrl}/rest/v1/rpc/${name}`, { method: "POST", headers, body: JSON.stringify(args) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.message ?? `HTTP ${res.status}`), { status: res.status });
+  return data;
+}
+
 const REFRESH_MS = 30_000;
+const LEVEL_LABELS = { empty: "空き", moderate: "やや混雑", crowded: "混雑" };
 const state = { rooms: [], selected: null, charts: {} };
 
 const $ = (id) => document.getElementById(id);
@@ -28,9 +43,7 @@ function esc(s) {
 
 async function loadRooms() {
   try {
-    const res = await fetch("/api/v1/rooms");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const data = await rpc("get_rooms");
     state.rooms = data.rooms;
     $("now").textContent = `更新 ${fmtDateTime(data.now)}（30秒ごとに自動更新）`;
     renderRooms();
@@ -45,7 +58,7 @@ async function loadRooms() {
 function renderRooms() {
   const box = $("rooms");
   if (!state.rooms.length) {
-    box.innerHTML = `<p class="muted">教室がありません。<code>python -m app.cli seed-demo</code> でデモデータを作れます。</p>`;
+    box.innerHTML = `<p class="muted">教室がありません。Supabase の SQL Editor で <code>supabase/seed_demo.sql</code> を実行するとデモデータを作れます。</p>`;
     return;
   }
   box.innerHTML = state.rooms.map((r) => {
@@ -57,7 +70,7 @@ function renderRooms() {
     return `
       <button class="card ${cls}" data-room="${esc(r.id)}" aria-pressed="${r.id === state.selected}">
         <div class="name">${esc(r.name)}</div>
-        <div class="level"><span class="dot" aria-hidden="true"></span>${esc(r.level_label)}</div>
+        <div class="level"><span class="dot" aria-hidden="true"></span>${LEVEL_LABELS[r.level] ?? "不明"}</div>
         <div class="people">${people}</div>
         <div class="muted">最終観測 ${fmtTime(r.updated_at)}
           ${r.calibration.calibrated ? "" : `<span class="uncal">（未校正：-80dBm以上の端末数をそのまま人数とみなしています）</span>`}</div>
@@ -92,9 +105,13 @@ async function loadHistory() {
   const next = new Date(`${day}T00:00:00+09:00`);
   next.setDate(next.getDate() + 1);
   const to = next.toISOString();
-  const res = await fetch(`/api/v1/rooms/${encodeURIComponent(room.id)}/history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
-  if (!res.ok) return;
-  const h = await res.json();
+  let h;
+  try {
+    h = await rpc("get_room_history", { room_id: room.id, from_ts: from, to_ts: to });
+  } catch (e) {
+    $("detail-note").textContent = `推移を読めませんでした: ${e.message}`;
+    return;
+  }
   $("detail-title").textContent = `${room.name} の推移`;
   $("detail-note").textContent =
     `推定に使う特徴量: ${h.feature} dBm 以上の端末数${h.calibrated ? "" : "（未校正の仮の式）"}。` +
@@ -233,19 +250,14 @@ $("gt-form").addEventListener("submit", async (ev) => {
   try { sessionStorage.setItem("adminToken", token); } catch { /* 保存できなくても続ける */ }
   const body = { room_id: $("gt-room").value, people: Number($("gt-people").value), note: $("gt-note").value || null };
   if ($("gt-time").value) body.observed_at = `${$("gt-time").value}:00+09:00`;
-  const res = await fetch("/api/v1/ground-truth", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (res.ok) {
+  try {
+    const data = await rpc("submit_ground_truth", body, { "x-admin-token": token });
     $("gt-msg").textContent = `登録しました：${fmtDateTime(data.observed_at)} ${data.people}人`;
     $("gt-people").value = "";
     $("gt-note").value = "";
     if (state.selected === body.room_id) loadHistory();
-  } else {
-    $("gt-msg").textContent = `登録できませんでした（${res.status}）：${data.detail ?? ""}`;
+  } catch (e) {
+    $("gt-msg").textContent = `登録できませんでした（${e.status ?? "通信失敗"}）：${e.message}`;
   }
 });
 

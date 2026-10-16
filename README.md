@@ -1,9 +1,9 @@
 # BLE教室混雑度推定システム
 
-教室に固定設置した Android スマホ（ノード）が周囲の BLE アドバタイズを受信し、集計値だけを API へ送信します。サーバ側で混雑度を推定し、Web ページで教室ごとの混雑度を表示します。
+教室に固定設置した Android スマホ（ノード）が周囲の BLE アドバタイズを受信し、集計値だけを Supabase へ送信します。Supabase（Postgres）の関数で混雑度を推定し、Web ページで教室ごとの混雑度を表示します。
 
 ```
-[Androidノード] --HTTPS/JSON(60秒ごと)--> [API: FastAPI + SQLite] <-- [Webページ: HTML + Chart.js]
+[Androidノード] --HTTPS/JSON(60秒ごと)--> [Supabase: Postgres + REST API] <-- [Webページ: HTML + Chart.js（GitHub Pages）]
 ```
 
 ## プライバシー方針
@@ -18,7 +18,9 @@
 
 ```
 /android   Kotlin アプリ（ノード）
-/server    FastAPI（API + 静的フロント配信）
+/supabase  Supabase のスキーマ（SQL）・デモデータ・SQL のテスト
+/web       Web ページ（ビルド不要。GitHub Pages で公開）
+/tools     端末内ログの取り込みなど
 /analysis  校正用スクリプト
 /docs      設計メモ・実験記録
 ```
@@ -41,13 +43,14 @@ Ambient には推定人数だけを送ります。複数のノードで1つの�
 
 端末への導入は `android/scripts/setup-device.sh` でまとめて行えます（インストール、権限付与、バッテリー最適化の除外、起動）。
 
-## API サーバ
+## Supabase と Web ページ
 
-`server/README.md` を参照してください。ローカルでは `seed-demo` でダミーデータを作り、http://localhost:8000/ で教室カードと推移グラフを確認できます。
+API・管理操作は `supabase/README.md` を参照してください。
+Web ページは `web/` にあり、main に push すると GitHub Actions が gh-pages ブランチへ公開します。手元で見るときは `python -m http.server -d web 8090` で http://localhost:8090/ を開きます。
 
 ## 開発フェーズ
 
 1. Android アプリ単体でスキャン・集計・JSON ログ記録（`docs/phase1-android-design.md`）
-2. API + SQLite、Android からの送信と再送
+2. Supabase（データベース＋API）、Android からの送信と再送
 3. Web ページ
 4. 校正スクリプトと実験手順書

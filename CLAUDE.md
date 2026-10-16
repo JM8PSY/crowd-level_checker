@@ -6,14 +6,15 @@
 
 ## 構成
 ```
-[Androidノード] --HTTPS/JSON(SIM回線, 60秒ごと)--> [API: FastAPI + SQLite] <-- [Webページ: HTML + Chart.js]
+[Androidノード] --HTTPS/JSON(SIM回線, 60秒ごと)--> [Supabase: Postgres + REST API] <-- [Webページ: HTML + Chart.js]
 ```
 
 ## リポジトリ構成
 ```
 /android   Kotlinアプリ（ノード）
-/server    FastAPI（API + 静的フロント配信）
-/server/static  フロントエンド
+/supabase  Supabase のスキーマ（migrations）・デモデータ・SQL のテスト
+/web       フロントエンド（GitHub Pages で公開）
+/tools     補助スクリプト
 /analysis  校正用スクリプト（Python, Jupyter可）
 /docs      設計メモ・実験記録
 ```
@@ -36,7 +37,7 @@
 - デバッグモードON時のみ、端末内CSVに生ログ（時刻、ハッシュ、RSSI、Company ID）を保存する。校正分析用で、送信はしない
 
 ### 送信
-- POST /api/v1/observations、ヘッダ `Authorization: Bearer <node_token>`
+- Supabase の RPC `POST /rest/v1/rpc/submit_observations`（本文 `{"payload": <観測値 または 配列>}`）、ヘッダ `apikey: <publishable key>` と `x-node-token: <node_token>`（Supabase では Authorization ヘッダが JWT 用のため独自ヘッダにする）
 - 送信に失敗したら端末内キュー（Room）に溜め、復帰時に再送する（timestampは観測時刻）
 - ペイロード例：
 ```json
@@ -51,18 +52,19 @@
 }
 ```
 
-## 2. API（/server）
-- Python 3.12 / FastAPI / SQLite（SQLAlchemy or SQLModel）/ Dockerで起動できるようにする
-- テーブル：rooms, nodes（room_idに紐付け、トークンはハッシュで保存）, observations, ground_truth（実人数）, calibrations（教室ごとの係数と段階の閾値）
-- エンドポイント
-  - POST /api/v1/observations（ノード用、トークン認証）
-  - POST /api/v1/ground-truth（実人数の手入力。管理用の簡易トークンで認証）
-  - GET /api/v1/rooms（各教室の最新の混雑度、ノードの生死）
-  - GET /api/v1/rooms/{id}/history?from=&to=（推移データ）
+## 2. API（/supabase）
+- 2026-10-16 に FastAPI + SQLite から Supabase（Postgres + 自動 REST API）へ変更。サーバは置かない
+- テーブル：rooms, nodes（room_idに紐付け、トークンはハッシュで保存）, observations, ground_truth（実人数）, calibrations（教室ごとの係数と段階の閾値）。書き込みは RPC 経由のみ（RLS）
+- RPC（詳細は supabase/README.md）
+  - submit_observations（ノード用、x-node-token で認証）
+  - submit_ground_truth（実人数の手入力。x-admin-token で認証）
+  - get_rooms（各教室の最新の混雑度、ノードの生死）
+  - get_room_history(room_id, from_ts, to_ts)（推移データ）
+- 管理操作（教室・ノード登録、トークン発行、校正値登録）は SQL Editor から private.* の関数で行う
 - 推定：採用する特徴量（初期値は counts_by_rssi["-80"]）に線形係数を掛けて推定人数を出し、閾値で「空き／やや混雑／混雑」に変換する。係数と閾値はcalibrationsテーブルから読む
 - 最終受信から3分を超えたノードは offline と表示する
 
-## 3. Webページ（/server/static）
+## 3. Webページ（/web）
 - ビルド不要の素のHTML/CSS/JS＋Chart.js（CDN）
 - 教室カード：段階表示（色＋文字）、推定人数の目安、最終更新時刻、ノード状態
 - 教室詳細：今日の推移グラフ
