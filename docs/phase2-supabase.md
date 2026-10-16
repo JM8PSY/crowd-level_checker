@@ -33,6 +33,7 @@
 - ノード `room-1-02`（教室 `room-1`）として導入。23:35 の窓から送信できている
 - 7a には Mac で署名したアプリが入っていて上書きできなかったため、アンインストールした。端末内ログ（10/8〜10/12、10/16）は事前に `Documents/crowd-level_checker_logs/pixel7a-backup-2026-10-16/` へ退避した。7a ではログがアプリ内部の領域（`files/logs`）にあり、`adb shell run-as com.crowdlevel.node` でしか読めなかった
 - 同じ時刻に Pixel 9a（`room-1-01`）は 23:19 の窓から受信0台が続いている（送信は続いている）。9a は触らずに置いているので原因は未調査
+- 同日、ユーザーの判断で Supabase から 9a のノード `room-1-01` とその観測値（45件）を削除し、7a だけにした。削除前の観測値は `Documents/crowd-level_checker_logs/supabase-room-1-01-backup-2026-10-16.jsonl` に退避した。9a 本体はそのままで、送信は 403 で拒否される（9a の端末内キューに溜まる）
 
 ## 未確認
 
