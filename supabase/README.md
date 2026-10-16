@@ -10,6 +10,8 @@
 
 ## API
 
+詳しい仕様と例は `docs/api-reference.md` にあります。
+
 どのリクエストにもヘッダ `apikey: <publishable key>` を付けます（publishable key は `web/config.js` にあり、公開してよいキーです）。
 
 | 呼び出し | 認証 | 内容 |

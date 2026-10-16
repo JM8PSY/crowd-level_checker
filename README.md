@@ -60,7 +60,7 @@ Ambient には推定人数だけを送ります。複数のノードで1つの�
 
 ## Supabase と Web ページ
 
-API・管理操作は `supabase/README.md` を参照してください。
+API の仕様は `docs/api-reference.md`、管理操作は `supabase/README.md` を参照してください。
 Web ページは `web/` にあり、main に push すると GitHub Actions が gh-pages ブランチへ公開します。手元で見るときは `python -m http.server -d web 8090` で http://localhost:8090/ を開きます。
 
 ## 開発フェーズ
